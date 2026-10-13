@@ -1,3 +1,48 @@
+# Python
 __pycache__/
 *.pyc
+.venv/
+.ipynb_checkpoints/
+
+# gem5 default / scratch output directories
 m5out/
+**/m5out/
+tmp/
+results/endterm/**/tmp/
+
+# Build outputs (rebuild with: scripts/env.sh make)
+build/
+*.o
+*.a
+*.so
+
+# Downloaded inputs (fetch with the download script, never commit)
+matrices/
+*.mtx
+*.mtx.gz
+*.tar.gz
+
+# Redundant gem5 per-run artefacts for NEW results. stats.txt.gz, config.ini.gz,
+# run.log and cmd.txt are kept. (Scoped to results/endterm/ on purpose: the
+# midterm results directory keeps its original files.)
+results/endterm/**/config.json
+results/endterm/**/config.dot
+results/endterm/**/config.dot.pdf
+results/endterm/**/config.dot.svg
+results/endterm/**/citations.bib
+results/endterm/**/stats.txt
+results/endterm/**/config.ini
+
+# gem5 source-tree build artefacts if a patch is tested in-repo
+gem5_patches/**/*.orig
+gem5_patches/**/*.rej
+
+# Hardware synthesis outputs
+hw/**/*.json
+hw/**/*.log
+
+# OS / editor
+.DS_Store
+*.swp
+.vscode/
+.idea/

@@ -100,7 +100,7 @@ These results establish an initial functional and performance baseline for the p
 - `src/spmv_rvv.c` — SpMV implementation and scalar validation.
 - `workloads/spmv_rvv` — compiled RISC-V executable.
 - `configs/rvv_test.py` — gem5 configuration.
-- `results/spmv_80/run.log` and `results/spmv_80/stats.txt` — 80%-sparsity run.
-- `results/spmv_40/run.log` and `results/spmv_40/stats.txt` — 40%-sparsity run.
-- `results/baseline_results.csv` — consolidated measurements.
+- `results/midterm/spmv_80/run.log` and `results/midterm/spmv_80/stats.txt` — 80%-sparsity run.
+- `results/midterm/spmv_40/run.log` and `results/midterm/spmv_40/stats.txt` — 40%-sparsity run.
+- `results/midterm/baseline_results.csv` — consolidated measurements.
 - `scripts/plot_baseline.py` — script for generating result figures.

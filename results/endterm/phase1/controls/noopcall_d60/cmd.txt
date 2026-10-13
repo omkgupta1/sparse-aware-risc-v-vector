@@ -1,0 +1,1 @@
+/workspace/gem5/build/RISCV/gem5.opt -d results/endterm/phase1/controls/noopcall_d60 configs/rvv_test.py --binary build/spmv_rvv_noopcall --vlen 256 --elen 64 --program-args 60 

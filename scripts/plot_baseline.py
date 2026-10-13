@@ -4,8 +4,8 @@ from pathlib import Path
 import matplotlib.pyplot as plt
 
 ROOT = Path(__file__).resolve().parents[1]
-CSV_PATH = ROOT / "results" / "baseline_results.csv"
-OUT_DIR = ROOT / "results" / "figures"
+CSV_PATH = ROOT / "results" / "midterm" / "baseline_results.csv"
+OUT_DIR = ROOT / "results" / "midterm" / "figures"
 OUT_DIR.mkdir(parents=True, exist_ok=True)
 
 with CSV_PATH.open(newline="") as f:
