@@ -1,0 +1,1 @@
+/workspace/gem5/build/RISCV/gem5.opt -d results/endterm/phase2/gem5_m4_investigation/o3_lq128_d100 configs/sparse_rvv.py --binary build/bench --lq-entries 128 --sq-entries 128 --program-args kernel=rvv_opt_m4 density=100 verbose=1 

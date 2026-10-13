@@ -1,0 +1,34 @@
+Global frequency set at 1000000000000 ticks per second
+src/arch/riscv/isa.cc:321: info: RVV enabled, VLEN = 256 bits, ELEN = 64 bits
+src/base/statistics.hh:279: warn: One of the stats is a legacy stat. Legacy stat is a stat that does not belong to any statistics::Group. Legacy stat is deprecated.
+src/base/stats/storage.hh:278: warn: Bucket size (4) does not divide range [1:32] into equal-sized buckets. Rounding up.
+src/base/stats/storage.hh:278: warn: Bucket size (4) does not divide range [1:8] into equal-sized buckets. Rounding up.
+src/base/remote_gdb.cc:418: warn: Sockets disabled, not accepting gdb connections
+gem5 Simulator System.  https://www.gem5.org
+gem5 is copyrighted software; use the --copyright option for details.
+
+gem5 version 25.1.0.1
+gem5 compiled Aug 29 2026 12:59:38
+gem5 started Oct 13 2026 14:09:08
+gem5 executing on f76f4eb112ac, pid 54
+command line: /workspace/gem5/build/RISCV/gem5.opt -d results/endterm/phase2/gem5_m4_investigation/o3_lq128_d20 configs/sparse_rvv.py --binary build/bench --lq-entries 128 --sq-entries 128 --program-args kernel=rvv_opt_m4 density=20 verbose=1
+
+info: Standard input is not a terminal, disabling listeners.
+sparse_rvv: cpu=o3 VLEN=256 ELEN=64 LQ=128 SQ=128 L1D=32KiB L2=512KiB
+Binary: /project/build/bench args: kernel=rvv_opt_m4 density=20 verbose=1
+src/sim/syscall_emul.cc:97: warn: ignoring syscall set_robust_list(...)
+      (further warnings will be suppressed)
+src/sim/syscall_emul.hh:1127: warn: readlink() called on '/proc/self/exe' may yield unexpected results in various settings.
+      Returning '/project/build/bench'
+src/sim/mem_state.cc:443: info: Increasing stack size by one page.
+src/sim/syscall_emul.cc:86: warn: ignoring syscall mprotect(...)
+CONFIG kernel=rvv_opt_m4 gen=midterm n=256 density=20 warmup=1 cold=0 tol=0.0001
+MATRIX rows=256 cols=256 nnz=12915 density_actual=0.197067 row_len_min=0 row_len_max=64 row_len_mean=50.4492 empty_rows=5
+VECTOR lmul=4 vlmax=32 chunks=502 reg_chunks=1756 active_elems=12915 useful_elems=12915 lane_util=0.803972
+BADROW row=114 len=51 y=13.3262033 ref=13.4973267 rel=1.268e-02
+BADROW row=155 len=52 y=14.839572 ref=14.8716583 rel=2.158e-03
+BADROW row=196 len=52 y=21.5401058 ref=21.8770059 rel=1.540e-02
+BADROW row=201 len=51 y=15.6417112 ref=15.6631021 rel=1.366e-03
+RESULT kernel=rvv_opt_m4 nnz=12915 checksum=3673.812927246 max_rel_err=1.539974e-02 bad_rows=4 validation=FAILED
+HOST_SECONDS=3
+EXIT_STATUS=0

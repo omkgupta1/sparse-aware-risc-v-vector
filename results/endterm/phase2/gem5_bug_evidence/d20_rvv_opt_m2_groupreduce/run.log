@@ -1,0 +1,31 @@
+Global frequency set at 1000000000000 ticks per second
+src/arch/riscv/isa.cc:321: info: RVV enabled, VLEN = 256 bits, ELEN = 64 bits
+src/base/statistics.hh:279: warn: One of the stats is a legacy stat. Legacy stat is a stat that does not belong to any statistics::Group. Legacy stat is deprecated.
+src/base/stats/storage.hh:278: warn: Bucket size (4) does not divide range [1:32] into equal-sized buckets. Rounding up.
+src/base/stats/storage.hh:278: warn: Bucket size (4) does not divide range [1:8] into equal-sized buckets. Rounding up.
+src/base/remote_gdb.cc:418: warn: Sockets disabled, not accepting gdb connections
+gem5 Simulator System.  https://www.gem5.org
+gem5 is copyrighted software; use the --copyright option for details.
+
+gem5 version 25.1.0.1
+gem5 compiled Aug 29 2026 12:59:38
+gem5 started Oct 13 2026 13:59:18
+gem5 executing on 5cbedf7f01cf, pid 42
+command line: /workspace/gem5/build/RISCV/gem5.opt -d results/endterm/phase2/d20/rvv_opt_m2 configs/rvv_test.py --binary build/bench --vlen 256 --elen 64 --program-args kernel=rvv_opt_m2 gen=midterm n=256 density=20 warmup=1
+
+info: Standard input is not a terminal, disabling listeners.
+Starting RVV test simulation
+Binary: /project/build/bench
+VLEN=256, ELEN=64
+src/sim/syscall_emul.cc:97: warn: ignoring syscall set_robust_list(...)
+      (further warnings will be suppressed)
+src/sim/syscall_emul.hh:1127: warn: readlink() called on '/proc/self/exe' may yield unexpected results in various settings.
+      Returning '/project/build/bench'
+src/sim/mem_state.cc:443: info: Increasing stack size by one page.
+src/sim/syscall_emul.cc:86: warn: ignoring syscall mprotect(...)
+CONFIG kernel=rvv_opt_m2 gen=midterm n=256 density=20 warmup=1 cold=0 tol=0.0001
+MATRIX rows=256 cols=256 nnz=12915 density_actual=0.197067 row_len_min=0 row_len_max=64 row_len_mean=50.4492 empty_rows=5
+VECTOR lmul=2 vlmax=16 chunks=996 active_elems=12915 useful_elems=12915 lane_util=0.810429
+RESULT kernel=rvv_opt_m2 nnz=12915 checksum=2007.288836479 max_rel_err=6.933243e-01 bad_rows=244 validation=FAILED
+HOST_SECONDS=4
+EXIT_STATUS=0

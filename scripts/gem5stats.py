@@ -144,10 +144,17 @@ def summarize(d):
         "l1d_misses": l1d_miss,
         "l1d_miss_rate": _ratio(l1d_miss, l1d_acc),
         "l1d_mpki": _ratio(l1d_miss * 1000, insts),
+        # gem5 counts a demand access that merges into an in-flight miss (MSHR
+        # hit) as a miss. Primary misses = MSHR misses (each one is a new
+        # request to the next level). Report both.
+        "l1d_mshr_hits": get(d, f"{L1D}.demandMshrHits::total", 0),
+        "l1d_primary_misses": get(d, f"{L1D}.demandMshrMisses::total", 0),
+        "l1d_primary_miss_rate": _ratio(get(d, f"{L1D}.demandMshrMisses::total", 0), l1d_acc),
         "l2_accesses": l2_acc,
         "l2_misses": l2_miss,
         "l2_miss_rate": _ratio(l2_miss, l2_acc),
         "l2_mpki": _ratio(l2_miss * 1000, insts),
+        "l2_primary_misses": get(d, f"{L2}.demandMshrMisses::total", 0),
         "dram_bytes_read": get(d, f"{MEM}.bytesReadSys", 0),
         "dram_bytes_written": get(d, f"{MEM}.bytesWrittenSys", 0),
         "lq_full_events": get(d, f"{CORE}.rename.LQFullEvents", 0),

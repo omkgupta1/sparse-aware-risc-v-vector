@@ -1,0 +1,1 @@
+/workspace/gem5/build/RISCV/gem5.opt -d results/endterm/phase2/d1/rvv_opt_m2 configs/sparse_rvv.py --binary build/bench --program-args kernel=rvv_opt_m2 gen=midterm n=256 density=1 warmup=1 

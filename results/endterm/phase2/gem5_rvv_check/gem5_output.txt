@@ -1,0 +1,24 @@
+T1_vmvNr_m2: 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16
+T2_vfmacc_full_m2: 1 6 15 28 45 66 91 120 153 190 231 276 325 378 435 496
+T3_vfredusum_vd_eq_vs2_m2: 136
+T4_vfredusum_vd_v31_m2: 136
+T5_vfmacc_tu_vl5_m2: 1.5 4 8.5 15 23.5 1 1 1 1 1 1 1 1 1 1 1
+T6_vfmacc_tu_vl5_then_vfredusum_m2: 55.5
+T7_vfmacc_tu_vl5_then_vfredusum_vd_v31_m2: 63.5
+T8_vfmacc_tu_vl5_store_then_vfredusum_m2: 55.5
+T9_vfadd_tu_vl5_then_vfredusum_m2: 30.5
+T10_vle32_tu_vl5_then_vfredusum_m2: 18
+T11_vfmacc_tu_vl5_vmvNr_then_vfredusum_m2: 55.5
+T1_vmvNr_m4: 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 23 24 25 26 27 28 29 30 31 32
+T2_vfmacc_full_m4: 1 6 15 28 45 66 91 120 153 190 231 276 325 378 435 496 561 630 703 780 861 946 1035 1128 1225 1326 1431 1540 1653 1770 1891 2016
+T3_vfredusum_vd_eq_vs2_m4: 528
+T4_vfredusum_vd_v31_m4: 528
+T5_vfmacc_tu_vl5_m4: 1.5 4 8.5 15 23.5 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1
+T6_vfmacc_tu_vl5_then_vfredusum_m4: 63.5
+T7_vfmacc_tu_vl5_then_vfredusum_vd_v31_m4: 79.5
+T8_vfmacc_tu_vl5_store_then_vfredusum_m4: 71.5
+T9_vfadd_tu_vl5_then_vfredusum_m4: 38.5
+T10_vle32_tu_vl5_then_vfredusum_m4: 26
+T11_vfmacc_tu_vl5_vmvNr_then_vfredusum_m4: 63.5
+T12_fold_to_m1_then_vfredusum_m2: 63.5
+T12_fold_to_m1_then_vfredusum_m4: 79.5

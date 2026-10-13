@@ -1,0 +1,28 @@
+6c6
+< T6_vfmacc_tu_vl5_then_vfredusum_m2: 63.5
+---
+> T6_vfmacc_tu_vl5_then_vfredusum_m2: 55.5
+8,11c8,11
+< T8_vfmacc_tu_vl5_store_then_vfredusum_m2: 63.5
+< T9_vfadd_tu_vl5_then_vfredusum_m2: 38.5
+< T10_vle32_tu_vl5_then_vfredusum_m2: 26
+< T11_vfmacc_tu_vl5_vmvNr_then_vfredusum_m2: 63.5
+---
+> T8_vfmacc_tu_vl5_store_then_vfredusum_m2: 55.5
+> T9_vfadd_tu_vl5_then_vfredusum_m2: 30.5
+> T10_vle32_tu_vl5_then_vfredusum_m2: 18
+> T11_vfmacc_tu_vl5_vmvNr_then_vfredusum_m2: 55.5
+17c17
+< T6_vfmacc_tu_vl5_then_vfredusum_m4: 79.5
+---
+> T6_vfmacc_tu_vl5_then_vfredusum_m4: 63.5
+19,22c19,22
+< T8_vfmacc_tu_vl5_store_then_vfredusum_m4: 79.5
+< T9_vfadd_tu_vl5_then_vfredusum_m4: 54.5
+< T10_vle32_tu_vl5_then_vfredusum_m4: 42
+< T11_vfmacc_tu_vl5_vmvNr_then_vfredusum_m4: 79.5
+---
+> T8_vfmacc_tu_vl5_store_then_vfredusum_m4: 71.5
+> T9_vfadd_tu_vl5_then_vfredusum_m4: 38.5
+> T10_vle32_tu_vl5_then_vfredusum_m4: 26
+> T11_vfmacc_tu_vl5_vmvNr_then_vfredusum_m4: 63.5

@@ -1,0 +1,1 @@
+/workspace/gem5/build/RISCV/gem5.opt -d results/endterm/phase2/d60/rvv_opt_m4 configs/rvv_test.py --binary build/bench --vlen 256 --elen 64 --program-args kernel=rvv_opt_m4 gen=midterm n=256 density=60 warmup=1 
