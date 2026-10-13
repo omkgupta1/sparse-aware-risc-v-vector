@@ -1,0 +1,1 @@
+/workspace/gem5/build/RISCV/gem5.opt -d results/endterm/phase3/spmm/u_n1024_d05_k08/spmm_rvv_colwise configs/sparse_rvv.py --binary build/bench --program-args kernel=spmm_rvv_colwise gen=uniform n=1024 density=5 seed=1 k=8 

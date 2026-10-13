@@ -1,0 +1,30 @@
+Global frequency set at 1000000000000 ticks per second
+src/arch/riscv/isa.cc:321: info: RVV enabled, VLEN = 256 bits, ELEN = 64 bits
+src/base/statistics.hh:279: warn: One of the stats is a legacy stat. Legacy stat is a stat that does not belong to any statistics::Group. Legacy stat is deprecated.
+src/base/stats/storage.hh:278: warn: Bucket size (4) does not divide range [1:32] into equal-sized buckets. Rounding up.
+src/base/stats/storage.hh:278: warn: Bucket size (4) does not divide range [1:8] into equal-sized buckets. Rounding up.
+src/base/remote_gdb.cc:418: warn: Sockets disabled, not accepting gdb connections
+gem5 Simulator System.  https://www.gem5.org
+gem5 is copyrighted software; use the --copyright option for details.
+
+gem5 version 25.1.0.1
+gem5 compiled Aug 29 2026 12:59:38
+gem5 started Oct 13 2026 14:51:37
+gem5 executing on 3192f6d2bf1f, pid 1307
+command line: /workspace/gem5/build/RISCV/gem5.opt -d results/endterm/phase3/size/p_r16384_c131072_npr16/rvv_opt_m1 configs/sparse_rvv.py --binary build/bench --program-args kernel=rvv_opt_m1 gen=powerlaw rows=16384 cols=131072 nnz_per_row=16 alpha=1.8 seed=1
+
+info: Standard input is not a terminal, disabling listeners.
+sparse_rvv: cpu=o3 VLEN=256 ELEN=64 LQ=default SQ=default L1D=32KiB L2=512KiB
+Binary: /project/build/bench args: kernel=rvv_opt_m1 gen=powerlaw rows=16384 cols=131072 nnz_per_row=16 alpha=1.8 seed=1
+src/sim/syscall_emul.cc:97: warn: ignoring syscall set_robust_list(...)
+      (further warnings will be suppressed)
+src/sim/syscall_emul.hh:1127: warn: readlink() called on '/proc/self/exe' may yield unexpected results in various settings.
+      Returning '/project/build/bench'
+src/sim/mem_state.cc:443: info: Increasing stack size by one page.
+src/sim/syscall_emul.cc:86: warn: ignoring syscall mprotect(...)
+CONFIG kernel=rvv_opt_m1 gen=powerlaw rows=16384 cols=131072 density_pct=20 nnz_per_row=16 alpha=1.8 seed=1 path=- k=1 warmup=1 cold=0 tol=0.0001
+MATRIX rows=16384 cols=131072 nnz=262686 density_actual=0.000122323 row_len_min=0 row_len_max=1182 row_len_mean=16.0331 row_len_cv=1.5977 empty_rows=4 csr_bytes=2167028 x_bytes=524288
+VECTOR lmul=1 vlmax=8 chunks=39937 reg_chunks=39937 active_elems=262686 useful_elems=262686 lane_util=0.822189
+RESULT kernel=rvv_opt_m1 nnz=262686 checksum=75762.702738754 max_rel_err=2.210100e-07 bad_rows=0 validation=PASSED
+HOST_SECONDS=148
+EXIT_STATUS=0

@@ -1,0 +1,1 @@
+/workspace/gem5/build/RISCV/gem5.opt -d results/endterm/phase3/spmm/luxembourg_osm_k16/spmm_rvv_vk configs/sparse_rvv.py --binary build/bench --program-args kernel=spmm_rvv_vk gen=file path=/project/matrices/luxembourg_osm.csr k=16 

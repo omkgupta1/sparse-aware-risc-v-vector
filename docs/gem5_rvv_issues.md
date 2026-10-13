@@ -70,9 +70,32 @@ vfmv.f.s ft0, v2
 - LMUL=1 and LMUL=2 gathers have never failed (5 densities, several builds), and neither has the LMUL=4 unit-stride load (`dense_m4`).
 - gem5 implements indexed loads (`VlIndex` template in `src/arch/riscv/isa/templates/vector_mem.isa`) as `vl` per-element load micro-ops that write a **pinned** destination register (`VPinVdMicroInst`, `setNumPinnedWrites`, `src/cpu/o3/rename_map.cc`). With 32 elements across 4 registers, this pinned-write path is the prime suspect. `vloxei32` uses the same template.
 
-**Handling:** `rvv_opt_m4` is **excluded from all performance claims**. If the O3 model doesn't enforce the dependency, the timing of the runs that pass may also be optimistic. A fix would be a gem5 C++ change (rebuild required), and that needs approval first (see PROGRESS.md).
+**Also triggered at LMUL=2 when two gathers are in flight (Phase 3).** `spmv_rvv_acc2_m2` issues two independent 16-element m2 gathers per loop iteration, so 32 element micro-ops are outstanding, the same as one m4 gather. On SuiteSparse `bcsstk17` it fails on O3 (rows of length ≥ 33, i.e. exactly those that take the dual-gather path; max relative error 0.25) and passes on MinorCPU with the same binary and input (`results/endterm/phase3/gem5_acc2_m2_investigation/`). QEMU passes all `rvv_acc2_m2` tests. This supports the pinned-destination hypothesis: the trigger is the number of in-flight indexed-load element micro-ops, not LMUL itself.
+
+**Phase 3 scale-up (316 runs, `results/endterm/phase3/phase3_summary.md`):** every validation failure in Phase 3 is an LMUL=2 gather kernel.
+- `rvv_acc2_m2` failed 22 of 29 runs: density sweep at 5–80% (it passed at 1% and 2%), all 5 power-law inputs, 6 of 10 size-sweep inputs, and 3 of 4 SuiteSparse matrices.
+- `rvv_opt_m2` (one m2 gather in flight per chunk) failed 3 of 41 runs: scircuit at VLEN=256 and VLEN=128, and the power-law 16K × 2K input. It validated everywhere else, including all of Phase 2.
+- All 246 other runs (scalar, LMUL=1 gather, dense, SpMM) validated.
+
+So the failure probability rises with the number of in-flight indexed-load element micro-ops, and with longer load latency (inputs whose gathers miss).
+
+**Handling:** `rvv_opt_m4` is not run. `rvv_opt_m2` and `rvv_acc2_m2` are still run, and the runs that validate are reported, but **no claim uses LMUL≥2 gather kernels**. If the bug can corrupt values, it may also perturb timing. Claims rely on scalar, LMUL=1-gather (`rvv_orig`, `rvv_opt_m1`, `rvv_acc2_m1`), dense (unit-stride) and SpMM kernels, which have never failed validation. If the O3 model doesn't enforce the dependency, the timing of the runs that pass may also be optimistic. A fix would be a gem5 C++ change (rebuild required), and that needs approval first (see PROGRESS.md).
 
 ## Other gem5 observations (not bugs)
 
 - **L1D "miss rate" counts MSHR hits.** A demand access that merges into an in-flight miss is counted in `demandMisses`. At LMUL=4 the two register micro-ops that touch the same 64-byte line issue back to back, so `dense_m4` reports a 49% "miss rate" but only 2.1–4.8% primary misses (depending on density). L2 accesses are identical across m1/m2/m4. Reports use `demandMshrMisses` (primary misses) alongside the raw rate.
 - **LMUL>1 arithmetic is split per register.** The committed micro-op count of a vector arithmetic instruction is the number of registers holding active elements, Σ ceil(len / VLMAX_m1), not the number of instructions. The harness prints this as `reg_chunks`, and the reports check it against `committedInstType`.
+
+## Observation: unit-stride loads of exactly 128 bytes are slow in the dense GEMV (timing only)
+
+In Phase 3 (1024 × 1024, matrix streamed from DRAM), the dense GEMV takes about 2.2M ROI cycles whenever one vector load covers exactly 128 bytes (two cache lines), and 0.5–0.77M cycles otherwise:
+
+| kernel | VLEN | bytes per vector load | ROI cycles (d=5%) |
+|---|---:|---:|---:|
+| dense_m4 | 128 | 64 | 593,669 |
+| dense_m2 | 256 | 64 | 590,030 |
+| **dense_m4** | **256** | **128** | **2,244,889** |
+| **dense_m2** | **512** | **128** | **2,257,635** |
+| dense_m4 | 512 | 256 | 507,298 |
+
+All of these runs validate, so this is a timing effect, not wrong results. Its cause is not yet known; one candidate is how the stride prefetcher trains on the paired line accesses. It will be examined with the prefetcher work in Phase 4B. It does not affect the dense-vs-sparse crossover, which uses the fastest dense variant (`dense_m2` at VLEN=256).

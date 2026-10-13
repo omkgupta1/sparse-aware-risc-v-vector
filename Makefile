@@ -40,12 +40,13 @@ $(BUILD)/spmv_rvv_resetdump: src/spmv_rvv_roi.c src/common/roi.h $(M5_LIB) | $(B
 # Scalar kernel and validation reference are built WITHOUT the V extension.
 OBJ      := $(BUILD)/obj
 HDRS     := $(wildcard src/*/*.h)
-BENCH_V  := harness/bench harness/matrix kernels/spmv_rvv_orig kernels/spmv_rvv_opt kernels/gemv_rvv
+BENCH_V  := harness/bench harness/matrix kernels/spmv_rvv_orig kernels/spmv_rvv_opt \
+            kernels/spmv_rvv_acc2 kernels/gemv_rvv kernels/spmm_rvv
 # Kernels are 64-byte aligned so their timing does not depend on unrelated code
 # layout (measured: unaligned rvv_orig moved 4.7% between builds; aligned, a
 # 1 KiB address shift changes kernel cycles by <0.1%; see PROGRESS.md Phase 2).
 KALIGN   := -falign-functions=64 -falign-loops=64
-BENCH_S  := kernels/spmv_scalar kernels/reference
+BENCH_S  := kernels/spmv_scalar kernels/spmm_scalar kernels/reference
 BENCH_OBJS := $(BENCH_V:%=$(OBJ)/%.o) $(BENCH_S:%=$(OBJ)/%.o)
 
 phase2: $(BUILD)/bench $(BUILD)/bench_qemu $(BUILD)/rvv_lmul_check
@@ -71,7 +72,7 @@ $(BENCH_V:%=$(OBJ)/%.o): $(OBJ)/%.o: src/%.c $(HDRS)
 	@mkdir -p $(dir $@)
 	$(CC) $(CFLAGS) $(ARCH_V) $(KALIGN) -DUSE_M5 $(M5_INC) -c $< -o $@
 
-$(OBJ)/kernels/spmv_scalar.o: src/kernels/spmv_scalar.c $(HDRS)
+$(OBJ)/kernels/spmv_scalar.o $(OBJ)/kernels/spmm_scalar.o: $(OBJ)/%.o: src/%.c $(HDRS)
 	@mkdir -p $(dir $@)
 	$(CC) $(CFLAGS) $(ARCH_S) $(KALIGN) -c $< -o $@
 
@@ -87,10 +88,15 @@ $(M5_LIB):
 # Functional check of every kernel under QEMU (VLEN=256), no timing.
 QEMU_CPU ?= rv64,v=true,vlen=256,elen=64
 qemu-test: $(BUILD)/bench_qemu
-	@fail=0; for k in scalar rvv_orig rvv_opt_m1 rvv_opt_m2 rvv_opt_m4 dense_m1 dense_m2 dense_m4; do \
-	  for d in 1 20 60 100; do \
-	    qemu-riscv64 -cpu $(QEMU_CPU) $(BUILD)/bench_qemu kernel=$$k density=$$d | grep RESULT || fail=1; \
-	  done; done; exit $$fail
+	@fail=0; q="qemu-riscv64 -cpu $(QEMU_CPU) $(BUILD)/bench_qemu"; \
+	for k in scalar rvv_orig rvv_opt_m1 rvv_opt_m2 rvv_opt_m4 rvv_acc2_m1 rvv_acc2_m2 dense_m1 dense_m2 dense_m4; do \
+	  for in in "gen=midterm n=256 density=1" "gen=midterm n=256 density=60" "gen=midterm n=256 density=100" \
+	            "gen=uniform rows=300 cols=1000 density=7" "gen=powerlaw rows=500 cols=700 nnz_per_row=20"; do \
+	    $$q kernel=$$k $$in 2>/dev/null | grep RESULT || { echo "FAILED/CRASHED: $$k $$in"; fail=1; }; \
+	  done; done; \
+	for k in spmm_scalar spmm_rvv_vk spmm_rvv_colwise; do for kk in 1 4 8 16 37; do \
+	  $$q kernel=$$k gen=powerlaw rows=400 cols=900 nnz_per_row=12 k=$$kk 2>/dev/null | grep RESULT || { echo "FAILED/CRASHED: $$k k=$$kk"; fail=1; }; \
+	done; done; exit $$fail
 
 $(BUILD):
 	mkdir -p $@

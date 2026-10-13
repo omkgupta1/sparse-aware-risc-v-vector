@@ -1,0 +1,1 @@
+/workspace/gem5/build/RISCV/gem5.opt -d results/endterm/phase3/density/u_n1024_d02/rvv_acc2_m1 configs/sparse_rvv.py --binary build/bench --program-args kernel=rvv_acc2_m1 gen=uniform n=1024 density=2 seed=1 

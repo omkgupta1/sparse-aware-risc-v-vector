@@ -1,0 +1,1 @@
+/workspace/gem5/build/RISCV/gem5.opt -d results/endterm/phase3/powerlaw/p_n1024_d01/rvv_opt_m2 configs/sparse_rvv.py --binary build/bench --program-args kernel=rvv_opt_m2 gen=powerlaw n=1024 density=1 alpha=1.8 seed=1 

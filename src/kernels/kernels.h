@@ -21,6 +21,17 @@ void spmv_rvv_opt_m1(const csr_t *A, const float *x, float *y);
 void spmv_rvv_opt_m2(const csr_t *A, const float *x, float *y);
 void spmv_rvv_opt_m4(const csr_t *A, const float *x, float *y);
 
+/* Two vector accumulators (halves the vfmacc dependency chain). */
+void spmv_rvv_acc2_m1(const csr_t *A, const float *x, float *y);
+void spmv_rvv_acc2_m2(const csr_t *A, const float *x, float *y);
+
+/* CSR SpMM, Y = A * X, X dense cols x k row-major, k <= SPMM_MAX_K. */
+#define SPMM_MAX_K 64
+typedef void (*spmm_fn)(const csr_t *A, const float *X, uint32_t k, float *Y);
+void spmm_scalar(const csr_t *A, const float *X, uint32_t k, float *Y);      /* rv64gc */
+void spmm_rvv_vk(const csr_t *A, const float *X, uint32_t k, float *Y);      /* over k, m2 */
+void spmm_rvv_colwise(const csr_t *A, const float *X, uint32_t k, float *Y); /* gathers, m1 */
+
 /* Dense RVV GEMV on a row-major rows x cols matrix (zeros included):
  * unit-stride loads, vfmacc accumulator, one horizontal sum per row. */
 typedef void (*gemv_fn)(const float *D, uint32_t rows, uint32_t cols,
@@ -33,5 +44,6 @@ void gemv_rvv_m4(const float *D, uint32_t rows, uint32_t cols, const float *x, f
  * -fno-tree-vectorize). abs_out[i] = sum_k |a_ik * x_k|, used to scale the
  * relative error tolerance. */
 void reference_spmv(const csr_t *A, const float *x, double *ref_out, double *abs_out);
+void reference_spmm(const csr_t *A, const float *X, uint32_t k, double *ref_out, double *abs_out);
 
 #endif

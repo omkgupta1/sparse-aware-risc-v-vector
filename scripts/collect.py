@@ -43,6 +43,11 @@ def parse_run_log(path):
         if tag in _TAGS:
             for k, v in re.findall(r"(\w+)=(\S+)", line):
                 rec[_TAGS[tag] + k] = _num(v)
+    m = re.search(r"^sparse_rvv: cpu=(\S+) VLEN=(\d+) ELEN=(\d+)", text, re.M)
+    if m:  # printed by configs/sparse_rvv.py
+        rec["sim_cpu"], rec["sim_vlen"], rec["sim_elen"] = m.group(1), int(m.group(2)), int(m.group(3))
+    m = re.search(r"^HOST_SECONDS=(\d+)$", text, re.M)
+    rec["host_seconds"] = int(m.group(1)) if m else None
     m = re.search(r"^EXIT_STATUS=(\d+)$", text, re.M)
     rec["exit_status"] = int(m.group(1)) if m else None
     return rec

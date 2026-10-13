@@ -1,0 +1,1 @@
+/workspace/gem5/build/RISCV/gem5.opt -d results/endterm/phase3/vlen/vlen128/u_n1024_d05/dense_m4 configs/sparse_rvv.py --binary build/bench --vlen 128 --program-args kernel=dense_m4 gen=uniform n=1024 density=5 seed=1 

@@ -1,0 +1,50 @@
+Global frequency set at 1000000000000 ticks per second
+src/arch/riscv/isa.cc:321: info: RVV enabled, VLEN = 256 bits, ELEN = 64 bits
+src/base/statistics.hh:279: warn: One of the stats is a legacy stat. Legacy stat is a stat that does not belong to any statistics::Group. Legacy stat is deprecated.
+src/base/stats/storage.hh:278: warn: Bucket size (4) does not divide range [1:32] into equal-sized buckets. Rounding up.
+src/base/stats/storage.hh:278: warn: Bucket size (4) does not divide range [1:8] into equal-sized buckets. Rounding up.
+src/base/remote_gdb.cc:418: warn: Sockets disabled, not accepting gdb connections
+gem5 Simulator System.  https://www.gem5.org
+gem5 is copyrighted software; use the --copyright option for details.
+
+gem5 version 25.1.0.1
+gem5 compiled Aug 29 2026 12:59:38
+gem5 started Oct 13 2026 14:35:33
+gem5 executing on 223289f39960, pid 14
+command line: /workspace/gem5/build/RISCV/gem5.opt -d results/endterm/phase3/gem5_acc2_m2_investigation/o3_bcsstk17 configs/sparse_rvv.py --binary build/bench --program-args kernel=rvv_acc2_m2 gen=file path=/project/matrices/bcsstk17.csr verbose=1
+
+info: Standard input is not a terminal, disabling listeners.
+sparse_rvv: cpu=o3 VLEN=256 ELEN=64 LQ=default SQ=default L1D=32KiB L2=512KiB
+Binary: /project/build/bench args: kernel=rvv_acc2_m2 gen=file path=/project/matrices/bcsstk17.csr verbose=1
+src/sim/syscall_emul.cc:97: warn: ignoring syscall set_robust_list(...)
+      (further warnings will be suppressed)
+src/sim/syscall_emul.hh:1127: warn: readlink() called on '/proc/self/exe' may yield unexpected results in various settings.
+      Returning '/project/build/bench'
+src/sim/mem_state.cc:443: info: Increasing stack size by one page.
+src/sim/syscall_emul.cc:86: warn: ignoring syscall mprotect(...)
+CONFIG kernel=rvv_acc2_m2 gen=file rows=10974 cols=10974 density_pct=20 nnz_per_row=0 alpha=1.8 seed=1 path=/project/matrices/bcsstk17.csr k=1 warmup=1 cold=0 tol=0.0001
+MATRIX rows=10974 cols=10974 nnz=428650 density_actual=0.00355937 row_len_min=1 row_len_max=150 row_len_mean=39.0605 row_len_cv=0.3946 empty_rows=0 csr_bytes=3473100 x_bytes=43896
+VECTOR lmul=2 vlmax=16 chunks=31768 reg_chunks=58129 active_elems=428650 useful_elems=428650 lane_util=0.843321
+BADROW out=31 row=31 len=33 y=47204496 ref=46707506.3 rel=5.773e-03
+BADROW out=32 row=32 len=33 y=16580669 ref=16618418.8 rel=6.814e-04
+BADROW out=74 row=74 len=39 y=5293360 ref=5273822.48 rel=3.802e-04
+BADROW out=295 row=295 len=45 y=3287653 ref=2648132.71 rel=1.383e-02
+BADROW out=296 row=296 len=45 y=1241024.5 ref=1421404.99 rel=9.912e-03
+BADROW out=307 row=307 len=45 y=-6907974 ref=-8826532.14 rel=6.141e-02
+BADROW out=783 row=783 len=45 y=4179706 ref=4177315.82 rel=3.633e-04
+BADROW out=798 row=798 len=45 y=32197332 ref=30095318.2 rel=3.516e-02
+BADROW out=799 row=799 len=45 y=-9660234 ref=-12102537.3 rel=7.398e-02
+BADROW out=883 row=883 len=48 y=19472428 ref=17557409.5 rel=1.084e-02
+BADROW out=890 row=890 len=42 y=-42559756 ref=-42651240.6 rel=4.811e-04
+BADROW out=893 row=893 len=36 y=1302479.62 ref=1301642.75 rel=2.471e-04
+BADROW out=897 row=897 len=51 y=48231212 ref=48757487.7 rel=5.878e-03
+BADROW out=902 row=902 len=47 y=-98527016 ref=-99016789.3 rel=3.135e-03
+BADROW out=903 row=903 len=59 y=31430158 ref=30464621.1 rel=1.526e-02
+BADROW out=922 row=922 len=51 y=38095480 ref=37793538.3 rel=4.256e-03
+BADROW out=928 row=928 len=59 y=51138536 ref=46793607.8 rel=6.310e-02
+BADROW out=940 row=940 len=43 y=26549624 ref=24396174.7 rel=3.152e-02
+BADROW out=970 row=970 len=51 y=9390017 ref=9764907.31 rel=6.235e-03
+BADROW out=972 row=972 len=48 y=-20932252 ref=-29137488.5 rel=8.298e-02
+RESULT kernel=rvv_acc2_m2 nnz=428650 checksum=92626386799.534667969 max_rel_err=2.474252e-01 bad_rows=741 validation=FAILED
+HOST_SECONDS=58
+EXIT_STATUS=0

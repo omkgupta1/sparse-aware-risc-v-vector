@@ -1,0 +1,1 @@
+/workspace/gem5/build/RISCV/gem5.opt -d results/endterm/phase3/size/u_r16384_c524288_npr16/rvv_acc2_m2 configs/sparse_rvv.py --binary build/bench --program-args kernel=rvv_acc2_m2 gen=uniform rows=16384 cols=524288 nnz_per_row=16 alpha=1.8 seed=1 

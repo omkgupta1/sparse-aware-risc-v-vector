@@ -1,0 +1,1 @@
+/workspace/gem5/build/RISCV/gem5.opt -d results/endterm/phase3/suitesparse/web-NotreDame/scalar configs/sparse_rvv.py --binary build/bench --program-args kernel=scalar gen=file path=/project/matrices/web-NotreDame.csr 

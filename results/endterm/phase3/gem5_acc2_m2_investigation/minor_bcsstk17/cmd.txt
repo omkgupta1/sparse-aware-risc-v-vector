@@ -1,0 +1,1 @@
+/workspace/gem5/build/RISCV/gem5.opt -d results/endterm/phase3/gem5_acc2_m2_investigation/minor_bcsstk17 configs/sparse_rvv.py --binary build/bench --cpu minor --program-args kernel=rvv_acc2_m2 gen=file path=/project/matrices/bcsstk17.csr verbose=1 

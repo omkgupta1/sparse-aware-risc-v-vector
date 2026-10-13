@@ -1,0 +1,1 @@
+/workspace/gem5/build/RISCV/gem5.opt -d results/endterm/phase3/vlen/vlen128/scircuit/rvv_opt_m1 configs/sparse_rvv.py --binary build/bench --vlen 128 --program-args kernel=rvv_opt_m1 gen=file path=/project/matrices/scircuit.csr 

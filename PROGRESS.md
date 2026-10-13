@@ -8,7 +8,7 @@ script-generated file under `results/endterm/`; the source file is named next to
 | 0. Environment | ✅ Done |
 | 1. Fix the measurement (ROI) | ✅ Done |
 | 2. Proper baselines | ✅ Done (rvv_opt_m4 excluded: gem5 O3 bug) |
-| 3. Realistic workloads and sweeps | ⏳ Not started |
+| 3. Realistic workloads and sweeps | ✅ Done (316 runs; LMUL=2 gather kernels unreliable on gem5 O3) |
 | 4A. Software sparse-aware mechanism | ⏳ Not started |
 | 4B. Hardware mechanism (indirect gather prefetcher, chosen 2026-10-13) | ⏳ Not started; gem5 C++ changes need approval first |
 | 5. Metrics, analysis, plots | ⏳ Not started |
@@ -124,3 +124,57 @@ ROI cycles (speedup vs. scalar):
 2. Hypothesis 3 (accumulator dependency chain) is not yet verified.
 3. All Phase 2 data is still cache-resident (n=256): `x` is 1 KiB and the CSR fits in L2. Phase 3 addresses this.
 4. Phase 1's whole-program toolchain caveat still applies to any end-to-end comparison.
+
+## Phase 3: Realistic workloads and sweeps (2026-10-13)
+
+**Done**
+- **O(NNZ) generator** (`gen_random` in `src/harness/matrix.c`, SplitMix64, `seed=1`). Columns are drawn by geometric skipping, so they come out sorted.
+  - `gen=uniform`: Bernoulli(p) per entry.
+  - `gen=powerlaw`: Pareto(α=1.8) expected row lengths, scaled to the target NNZ and capped at `cols`.
+  - Measured density is within 2% of the target.
+  - Row-length CV: uniform 0.03–0.31; power-law 0.8–3.6. With α<2 the variance is infinite, so the CV depends on the seed; the measured CV is always reported.
+- **SuiteSparse:** `scripts/download_matrices.sh` fetches 4 matrices (sha256 manifest), and `scripts/mtx2bin.py` converts `.mtx` → binary CSR (symmetric expansion, synthetic values for pattern matrices, duplicates summed).
+  - The harness reads the binary file (`gen=file`), because parsing text inside gem5 would cost about 1–2K simulated instructions per line.
+  - `matrices/` is git-ignored.
+  - NNZ match the collection: bcsstk17 428,650 · scircuit 958,936 · web-NotreDame 1,497,134 · luxembourg_osm 239,332.
+- **New kernels:**
+  - `rvv_acc2_m{1,2}`: two vector accumulators.
+  - SpMM: `spmm_scalar` (rv64gc); `spmm_rvv_vk` (vectorised over the K dense columns, unit-stride `vfmacc.vf`, m2, no gathers or reductions); `spmm_rvv_colwise` (one m1 gather pass per output column).
+  - Double-precision SpMM reference.
+- The harness prints row-length CV, CSR/x footprint and per-kernel chunk/lane accounting for SpMV, GEMV and SpMM.
+- `make qemu-test`: 65/65 pass (plus VLEN 128/512 spot checks). All 9 SpMV/SpMM kernels pass on all 4 SuiteSparse matrices under QEMU.
+- `scripts/run_phase3.sh` (316 runs in 6 groups, 8 in parallel, about 90 min). `scripts/phase3_report.py` writes `results/endterm/phase3/phase3_all.csv` (one row per run, all metrics) and `phase3_summary.md`.
+- `collect.py` now also records the CPU model, VLEN and host seconds per run.
+
+**Validation:** 316 runs, no gem5 crashes.
+- **All 246 runs that do not use LMUL=2 gathers validated:** scalar, `rvv_orig`, `rvv_opt_m1`, `rvv_acc2_m1`, dense, SpMM.
+- **All 25 failures are LMUL=2 gather kernels:** `rvv_acc2_m2` 22/29, `rvv_opt_m2` 3/41.
+- gem5 Issue 2 is therefore broader than LMUL=4. `rvv_acc2_m2` on bcsstk17 is correct on MinorCPU and wrong on O3 (`results/endterm/phase3/gem5_acc2_m2_investigation/`).
+- **Policy from Phase 3 on:** claims use only scalar, LMUL=1-gather, dense and SpMM kernels. Validated LMUL=2-gather runs are shown but marked. Details in `docs/gem5_rvv_issues.md`.
+
+**Results** (source: `results/endterm/phase3/phase3_summary.md` / `phase3_all.csv`; ROI cycles; O3; VLEN=256 unless stated)
+
+1. **RVV vs. scalar SpMV (uniform 1024×1024):** `rvv_orig` is 1.41× faster at 1% density (mean row 10, m1 lane utilisation 74.3%) and 5.28× at 60–80% (lane utilisation >99%).
+2. **Dense-vs-sparse crossover ≈58.2% density** (reliable kernels: `rvv_orig` vs. `dense_m2`; measured ratio 0.889 at 50% and 1.024 at 60%, linearly interpolated). Including the unreliable `rvv_opt_m2` would give ≈63.1%; not used.
+3. **Gathers that miss in cache** (16,384 rows × 16 nnz/row, `x` from 8 KiB to 2 MiB):
+   - `rvv_orig` L1D primary miss rate goes from 0.1% to 59.3%, and L2 miss rate reaches 70.4% at 2 MiB.
+   - Its speedup over scalar falls from 1.91× (32 KiB `x`) to 1.31–1.75× once `x` exceeds L1D.
+   - LQ-full events grow 46× (21,747 → 996,601, uniform).
+4. **A single vector accumulator collapses when gathers miss.** `rvv_opt_m1` takes 2.73× `rvv_orig`'s time at 2 MiB `x` (uniform), but only 1.02× at 8 KiB. Two accumulators (`rvv_acc2_m1`) recover part of the loss (2.13×).
+   - Dense sweep: `acc2_m1` is 1.10–1.18× faster than `opt_m1` at ≥20% density.
+   - So the loop-carried `vfmacc` chain is part of the cause (Phase 2 hypothesis 3: partly confirmed). The midterm per-chunk-reduction kernel is the most robust LMUL=1 kernel under misses.
+5. **Row-length skew (power-law vs. uniform, n=1024):** 1.07–1.33× slower at 1–2% density, no measurable effect at ≥10%. Lane utilisation barely changes, because n=1024 rows stay long. Short rows matter more:
+   - On luxembourg_osm (mean row 2.09, lane utilisation 26.1%) every RVV kernel is slower than scalar (`rvv_orig` 0.92×).
+6. **SuiteSparse, `rvv_orig` vs. scalar:** bcsstk17 (FEM, mean row 39) 3.01× · web-NotreDame (web, CV 4.67) 1.67× · scircuit (circuit, mean row 5.6) 1.22× · luxembourg_osm (road, mean row 2.1) 0.92×.
+7. **SpMM:** `spmm_rvv_vk` is 2.78–25.13× faster than scalar SpMM and faster than the gather-based `spmm_rvv_colwise` (1.41–7.08×) on every input. Vectorising over the dense dimension avoids gathers entirely.
+8. **VLEN (`rvv_orig`):** 128→256 gives 1.47–1.51× on cache-resident inputs but only 1.09–1.11× when `x` misses (2 MiB `x`, scircuit). 256→512 gives 1.04–1.26×. Wider vectors help little once gathers are memory-bound.
+
+**Failed / limits**
+- 25 LMUL=2-gather runs failed validation (gem5 Issue 2, above).
+- **2 runs exceeded the 10-minute limit** with 8 runs in parallel: luxembourg_osm SpMM K=16 `spmm_scalar` (743 s) and `spmm_rvv_colwise` (798 s). Results are valid; the limit was missed.
+- Pilot: SpMM K=16 on web-NotreDame ran more than 12 min, so it was dropped from the grid.
+
+**Open issues after Phase 3**
+1. **gem5 Issue 2 now affects LMUL=2 gathers, not just LMUL=4.** Under the current policy (option a) all claims use LMUL=1 gathers, which have never failed. This is enough for Phase 4, since the prefetcher targets m1 gathers. An LMUL sweep for gathers is not possible on gem5 O3 without fixing the bug.
+2. **Dense GEMV loads of exactly 128 bytes** (m4@VLEN256, m2@VLEN512) are about 3.8× slower than 64-byte or 256-byte loads, with correct results. Cause unknown; to examine with the prefetcher work (`docs/gem5_rvv_issues.md`).
+3. The `results/endterm` total is now 32 MB (`stats.txt.gz` + `config.ini.gz` + logs). That's fine for git, but Phase 4/5 should avoid unnecessary reruns.

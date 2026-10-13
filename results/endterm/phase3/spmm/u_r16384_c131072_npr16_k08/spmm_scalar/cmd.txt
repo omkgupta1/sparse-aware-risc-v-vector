@@ -1,0 +1,1 @@
+/workspace/gem5/build/RISCV/gem5.opt -d results/endterm/phase3/spmm/u_r16384_c131072_npr16_k08/spmm_scalar configs/sparse_rvv.py --binary build/bench --program-args kernel=spmm_scalar gen=uniform rows=16384 cols=131072 nnz_per_row=16 seed=1 k=8 

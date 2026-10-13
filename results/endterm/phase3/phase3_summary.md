@@ -1,0 +1,231 @@
+# Phase 3 results
+
+All numbers are ROI-only (kernel) metrics from gem5 stats, O3 CPU @ 1 GHz unless stated.
+Speedups are ROI-cycle ratios on identical inputs. `–` = run missing or failed validation.
+
+**Reliability note:** kernels with LMUL=2 gathers (`rvv_opt_m2`, `rvv_acc2_m2`) produce
+intermittently wrong results on gem5 25.1 O3 (docs/gem5_rvv_issues.md, Issue 2). Their runs
+that validated are shown for completeness, but claims use only scalar, LMUL=1-gather
+(rvv_orig, rvv_opt_m1, rvv_acc2_m1), dense (unit-stride) and SpMM kernels.
+
+## Run status
+
+Incomplete (running or interrupted, not counted): 0
+
+| group | validated | failed |
+|---|---:|---:|
+| density | 82 | 8 |
+| powerlaw | 25 | 5 |
+| size | 53 | 7 |
+| spmm | 54 | 0 |
+| suitesparse | 20 | 4 |
+| vlen | 57 | 1 |
+
+Failed runs (excluded everywhere):
+
+- `results/endterm/phase3/density/u_n1024_d05/rvv_acc2_m2`: exit=0 validation=FAILED max_rel_err=0.0774135 
+- `results/endterm/phase3/density/u_n1024_d10/rvv_acc2_m2`: exit=0 validation=FAILED max_rel_err=0.07320122 
+- `results/endterm/phase3/density/u_n1024_d20/rvv_acc2_m2`: exit=0 validation=FAILED max_rel_err=0.061008 
+- `results/endterm/phase3/density/u_n1024_d30/rvv_acc2_m2`: exit=0 validation=FAILED max_rel_err=0.04751281 
+- `results/endterm/phase3/density/u_n1024_d40/rvv_acc2_m2`: exit=0 validation=FAILED max_rel_err=0.04489695 
+- `results/endterm/phase3/density/u_n1024_d50/rvv_acc2_m2`: exit=0 validation=FAILED max_rel_err=0.04559129 
+- `results/endterm/phase3/density/u_n1024_d60/rvv_acc2_m2`: exit=0 validation=FAILED max_rel_err=0.04883945 
+- `results/endterm/phase3/density/u_n1024_d80/rvv_acc2_m2`: exit=0 validation=FAILED max_rel_err=0.03890143 
+- `results/endterm/phase3/powerlaw/p_n1024_d01/rvv_acc2_m2`: exit=0 validation=FAILED max_rel_err=0.06559088 
+- `results/endterm/phase3/powerlaw/p_n1024_d02/rvv_acc2_m2`: exit=0 validation=FAILED max_rel_err=0.09395974 
+- `results/endterm/phase3/powerlaw/p_n1024_d05/rvv_acc2_m2`: exit=0 validation=FAILED max_rel_err=0.1149425 
+- `results/endterm/phase3/powerlaw/p_n1024_d10/rvv_acc2_m2`: exit=0 validation=FAILED max_rel_err=0.06657179 
+- `results/endterm/phase3/powerlaw/p_n1024_d20/rvv_acc2_m2`: exit=0 validation=FAILED max_rel_err=0.06109131 
+- `results/endterm/phase3/size/p_r16384_c002048_npr16/rvv_acc2_m2`: exit=0 validation=FAILED max_rel_err=0.2432432 
+- `results/endterm/phase3/size/p_r16384_c002048_npr16/rvv_opt_m2`: exit=0 validation=FAILED max_rel_err=0.2432432 
+- `results/endterm/phase3/size/p_r16384_c008192_npr16/rvv_acc2_m2`: exit=0 validation=FAILED max_rel_err=0.1077208 
+- `results/endterm/phase3/size/p_r16384_c032768_npr16/rvv_acc2_m2`: exit=0 validation=FAILED max_rel_err=0.054945 
+- `results/endterm/phase3/size/p_r16384_c131072_npr16/rvv_acc2_m2`: exit=0 validation=FAILED max_rel_err=0.01560971 
+- `results/endterm/phase3/size/u_r16384_c002048_npr16/rvv_acc2_m2`: exit=0 validation=FAILED max_rel_err=0.05561071 
+- `results/endterm/phase3/size/u_r16384_c008192_npr16/rvv_acc2_m2`: exit=0 validation=FAILED max_rel_err=0.04551737 
+- `results/endterm/phase3/suitesparse/bcsstk17/rvv_acc2_m2`: exit=0 validation=FAILED max_rel_err=0.2474252 
+- `results/endterm/phase3/suitesparse/scircuit/rvv_acc2_m2`: exit=0 validation=FAILED max_rel_err=0.5333281 
+- `results/endterm/phase3/suitesparse/scircuit/rvv_opt_m2`: exit=0 validation=FAILED max_rel_err=0.4736831 
+- `results/endterm/phase3/suitesparse/web-NotreDame/rvv_acc2_m2`: exit=0 validation=FAILED max_rel_err=0.2178828 
+- `results/endterm/phase3/vlen/vlen128/scircuit/rvv_opt_m2`: exit=0 validation=FAILED max_rel_err=0.690852 
+
+Host time per run: max 798 s, median 124 s (limit 600 s; 2 runs over).
+
+## Density sweep (uniform, 1024×1024, VLEN=256): dense vs. sparse crossover
+
+| density | scalar | rvv_orig | rvv_opt_m1 | rvv_opt_m2 | rvv_acc2_m1 | rvv_acc2_m2 | dense_m1 | dense_m2 | dense_m4 | best dense | best reliable sparse (m1 gathers) | sparse/dense time | best of all validated sparse | sparse/dense time |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| 1% | 39,543 | 28,030 | 28,405 | 22,682 | 29,532 | 24,760 | 759,918 | 589,761 | 2,245,386 | dense_m2 | rvv_orig | 0.05× | rvv_opt_m2 | 0.04× |
+| 2% | 79,703 | 35,199 | 35,869 | 28,884 | 33,391 | 31,398 | 759,659 | 589,810 | 2,245,394 | dense_m2 | rvv_acc2_m1 | 0.06× | rvv_opt_m2 | 0.05× |
+| 5% | 235,675 | 66,127 | 67,297 | 51,233 | 65,089 | – | 759,642 | 590,030 | 2,244,889 | dense_m2 | rvv_acc2_m1 | 0.11× | rvv_opt_m2 | 0.09× |
+| 10% | 509,786 | 124,596 | 135,520 | 108,955 | 136,380 | – | 759,982 | 589,627 | 2,245,157 | dense_m2 | rvv_orig | 0.21× | rvv_opt_m2 | 0.18× |
+| 20% | 1,045,154 | 216,890 | 263,566 | 190,286 | 239,892 | – | 759,560 | 589,851 | 2,172,754 | dense_m2 | rvv_orig | 0.37× | rvv_opt_m2 | 0.32× |
+| 30% | 1,592,923 | 322,047 | 391,718 | 300,083 | 357,090 | – | 759,582 | 589,637 | 2,245,379 | dense_m2 | rvv_orig | 0.55× | rvv_opt_m2 | 0.51× |
+| 40% | 2,127,692 | 410,132 | 519,354 | 374,704 | 448,694 | – | 759,376 | 589,499 | 2,252,223 | dense_m2 | rvv_orig | 0.70× | rvv_opt_m2 | 0.64× |
+| 50% | 2,664,833 | 523,573 | 649,764 | 493,008 | 572,200 | – | 759,302 | 589,160 | 2,245,423 | dense_m2 | rvv_orig | 0.89× | rvv_opt_m2 | 0.84× |
+| 60% | 3,189,047 | 603,687 | 774,697 | 558,913 | 660,227 | – | 759,343 | 589,497 | 2,245,248 | dense_m2 | rvv_orig | 1.02× | rvv_opt_m2 | 0.95× |
+| 80% | 4,253,309 | 805,778 | 1,031,554 | 755,331 | 872,979 | – | 759,349 | 589,649 | 2,245,137 | dense_m2 | rvv_orig | 1.37× | rvv_opt_m2 | 1.28× |
+
+`sparse/dense time` < 1 means the sparse kernel is faster.
+
+- **Best reliable sparse kernel (LMUL=1 gathers; used for claims):** sparse is faster up to 50% density (rvv_orig, time ratio 0.889) and slower from 60% (rvv_orig, ratio 1.024); linear interpolation of the ratio puts the crossover at ≈58.2% density.
+- **Best of all validated sparse kernels (includes LMUL=2 gathers; not used for claims):** sparse is faster up to 60% density (rvv_opt_m2, time ratio 0.948) and slower from 80% (rvv_opt_m2, ratio 1.281); linear interpolation of the ratio puts the crossover at ≈63.1% density.
+
+Speedup over scalar CSR, and lane utilisation of the m1 kernels:
+
+| density | rvv_orig | rvv_opt_m1 | rvv_opt_m2 | rvv_acc2_m1 | rvv_acc2_m2 | mean row len | lane util (m1) |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| 1% | 1.41× | 1.39× | 1.74× | 1.34× | 1.60× | 10.0 | 74.28% |
+| 2% | 2.26× | 2.22× | 2.76× | 2.39× | 2.54× | 20.1 | 85.29% |
+| 5% | 3.56× | 3.50× | 4.60× | 3.62× | – | 51.5 | 93.67% |
+| 10% | 4.09× | 3.76× | 4.68× | 3.74× | – | 102.7 | 96.82% |
+| 20% | 4.82× | 3.97× | 5.49× | 4.36× | – | 205.6 | 98.32% |
+| 30% | 4.95× | 4.07× | 5.31× | 4.46× | – | 307.2 | 98.86% |
+| 40% | 5.19× | 4.10× | 5.68× | 4.74× | – | 410.2 | 99.15% |
+| 50% | 5.09× | 4.10× | 5.41× | 4.66× | – | 513.5 | 99.32% |
+| 60% | 5.28× | 4.12× | 5.71× | 4.83× | – | 614.4 | 99.46% |
+| 80% | 5.28× | 4.12× | 5.63× | 4.87× | – | 819.6 | 99.56% |
+
+Two-accumulator test (Phase 2 hypothesis: the single vfmacc chain limits rvv_opt):
+
+| density | rvv_orig | opt_m1 | acc2_m1 | acc2_m1 speedup over opt_m1 | opt_m2 | acc2_m2 | acc2_m2 speedup over opt_m2 |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| 1% | 28,030 | 28,405 | 29,532 | 0.96× | 22,682 | 24,760 | 0.92× |
+| 2% | 35,199 | 35,869 | 33,391 | 1.07× | 28,884 | 31,398 | 0.92× |
+| 5% | 66,127 | 67,297 | 65,089 | 1.03× | 51,233 | – | – |
+| 10% | 124,596 | 135,520 | 136,380 | 0.99× | 108,955 | – | – |
+| 20% | 216,890 | 263,566 | 239,892 | 1.10× | 190,286 | – | – |
+| 30% | 322,047 | 391,718 | 357,090 | 1.10× | 300,083 | – | – |
+| 40% | 410,132 | 519,354 | 448,694 | 1.16× | 374,704 | – | – |
+| 50% | 523,573 | 649,764 | 572,200 | 1.14× | 493,008 | – | – |
+| 60% | 603,687 | 774,697 | 660,227 | 1.17× | 558,913 | – | – |
+| 80% | 805,778 | 1,031,554 | 872,979 | 1.18× | 755,331 | – | – |
+
+## Row-length skew: power-law (α=1.8) vs. uniform, 1024×1024
+
+Cycles (power-law / uniform time ratio in brackets; >1 = skew costs time).
+
+| density | row-len CV u→p | lane util m1 u→p | scalar | rvv_orig | rvv_opt_m1 | rvv_opt_m2 | rvv_acc2_m1 | rvv_acc2_m2 |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|
+| 1% | 0.312 → 2.27 | 74.28% → 74.71% | 44,288 (1.12) | 31,150 (1.11) | 31,955 (1.12) | 25,662 (1.13) | 31,464 (1.07) | – |
+| 2% | 0.214 → 1.89 | 85.29% → 85.54% | 88,423 (1.11) | 42,560 (1.21) | 43,856 (1.22) | 34,737 (1.20) | 44,524 (1.33) | – |
+| 5% | 0.135 → 1.24 | 93.67% → 93.66% | 235,084 (1.00) | 67,538 (1.02) | 71,684 (1.07) | 56,526 (1.10) | 69,959 (1.07) | – |
+| 10% | 0.0955 → 1.04 | 96.82% → 96.67% | 509,637 (1.00) | 124,990 (1.00) | 138,173 (1.02) | 111,027 (1.02) | 144,175 (1.06) | – |
+| 20% | 0.0617 → 0.796 | 98.32% → 98.32% | 1,048,024 (1.00) | 217,959 (1.00) | 263,688 (1.00) | 193,571 (1.02) | 242,042 (1.01) | – |
+
+## Size sweep: 16,384 rows × 16 nnz/row; x grows past L1D (32 KiB) and L2 (512 KiB)
+
+| dist | x size | row CV | scalar | rvv_orig | rvv_opt_m1 | rvv_opt_m2 | rvv_acc2_m1 | rvv_acc2_m2 | best RVV vs scalar |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| power-law | 8 KiB | 1.6 | 1,125,008 | 657,520 | 668,967 | – | 723,095 | – | rvv_orig 1.71× |
+| power-law | 32 KiB | 1.6 | 1,183,266 | 683,882 | 836,584 | 605,765 | 870,741 | – | rvv_opt_m2 1.95× |
+| power-law | 128 KiB | 1.6 | 1,231,317 | 912,522 | 1,312,129 | 940,172 | 1,139,835 | – | rvv_orig 1.35× |
+| power-law | 512 KiB | 1.6 | 2,415,278 | 1,442,755 | 3,517,450 | 2,265,225 | 2,785,011 | – | rvv_orig 1.67× |
+| power-law | 2,048 KiB | 1.6 | 3,181,365 | 2,089,695 | 5,577,139 | 3,618,272 | 4,501,571 | 3,372,990 | rvv_orig 1.52× |
+| uniform | 8 KiB | 0.249 | 1,049,150 | 565,377 | 574,209 | 509,814 | 674,610 | – | rvv_opt_m2 2.06× |
+| uniform | 32 KiB | 0.25 | 1,120,029 | 586,735 | 822,708 | 578,017 | 728,858 | – | rvv_opt_m2 1.94× |
+| uniform | 128 KiB | 0.25 | 1,181,132 | 904,333 | 1,313,157 | 919,465 | 1,080,449 | 921,512 | rvv_orig 1.31× |
+| uniform | 512 KiB | 0.25 | 2,427,101 | 1,388,455 | 3,545,002 | 2,162,959 | 2,702,744 | 2,160,902 | rvv_orig 1.75× |
+| uniform | 2,048 KiB | 0.25 | 3,257,311 | 2,085,448 | 5,682,861 | 3,551,576 | 4,448,845 | 3,547,863 | rvv_orig 1.56× |
+
+Memory behaviour (ROI) of scalar and rvv_opt_m2:
+
+| input (x size) | kernel | cycles | L1D primary miss | L1D MPKI | L2 miss rate | L2 MPKI | DRAM read | LQ-full events |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|
+| p 8 KiB | scalar | 1,125,008 | 0.08% | 2.1 | 8.70% | 1.1 | 2,169 KiB | 443,638 |
+| p 8 KiB | rvv_orig | 657,520 | 0.14% | 3.74 | 16.30% | 5.29 | 2,169 KiB | 20,398 |
+| p 32 KiB | scalar | 1,183,266 | 7.45% | 26.2 | 2.99% | 1.08 | 2,170 KiB | 506,101 |
+| p 32 KiB | rvv_orig | 683,882 | 13.30% | 66.5 | 4.20% | 3.89 | 2,170 KiB | 54,021 |
+| p 32 KiB | rvv_opt_m2 | 605,765 | 13.15% | 90.3 | 3.80% | 4.85 | 2,171 KiB | 125,535 |
+| p 128 KiB | scalar | 1,231,317 | 24.23% | 78.0 | 1.21% | 1.07 | 2,173 KiB | 556,483 |
+| p 128 KiB | rvv_orig | 912,522 | 49.55% | 260.8 | 1.68% | 3.79 | 2,172 KiB | 286,978 |
+| p 128 KiB | rvv_opt_m2 | 940,172 | 47.20% | 289.5 | 1.60% | 5 | 2,172 KiB | 415,096 |
+| p 512 KiB | scalar | 2,415,278 | 29.10% | 92.2 | 20.49% | 21.2 | 5,681 KiB | 1,477,739 |
+| p 512 KiB | rvv_orig | 1,442,755 | 53.34% | 236.2 | 20.62% | 54.8 | 5,677 KiB | 471,649 |
+| p 512 KiB | rvv_opt_m2 | 2,265,225 | 55.61% | 321.5 | 20.52% | 75.2 | 5,682 KiB | 720,541 |
+| p 2,048 KiB | scalar | 3,181,365 | 30.55% | 95.7 | 70.22% | 75.3 | 15,056 KiB | 1,806,149 |
+| p 2,048 KiB | rvv_orig | 2,089,695 | 57.65% | 245.9 | 70.42% | 193.9 | 15,052 KiB | 828,510 |
+| p 2,048 KiB | rvv_opt_m2 | 3,618,272 | 59.03% | 333.8 | 70.24% | 266.7 | 15,056 KiB | 1,124,246 |
+| u 8 KiB | scalar | 1,049,150 | 0.08% | 2.14 | 8.98% | 1.13 | 2,164 KiB | 371,718 |
+| u 8 KiB | rvv_orig | 565,377 | 0.15% | 4.12 | 12.13% | 3.94 | 2,164 KiB | 21,747 |
+| u 8 KiB | rvv_opt_m2 | 509,814 | 0.14% | 3.16 | 12.38% | 5.56 | 2,164 KiB | 27,853 |
+| u 32 KiB | scalar | 1,120,029 | 7.38% | 25.4 | 3.04% | 1.1 | 2,166 KiB | 444,508 |
+| u 32 KiB | rvv_orig | 586,735 | 13.57% | 63.7 | 4.29% | 3.96 | 2,166 KiB | 63,694 |
+| u 32 KiB | rvv_opt_m2 | 578,017 | 13.31% | 87.5 | 3.86% | 4.95 | 2,166 KiB | 139,583 |
+| u 128 KiB | scalar | 1,181,132 | 24.07% | 77.6 | 1.22% | 1.08 | 2,167 KiB | 507,521 |
+| u 128 KiB | rvv_orig | 904,333 | 52.24% | 269.0 | 1.47% | 3.3 | 2,167 KiB | 407,394 |
+| u 128 KiB | rvv_opt_m2 | 919,465 | 48.88% | 304.8 | 1.60% | 5.01 | 2,167 KiB | 413,877 |
+| u 512 KiB | scalar | 2,427,101 | 28.91% | 92.1 | 20.51% | 21.2 | 5,676 KiB | 1,494,607 |
+| u 512 KiB | rvv_orig | 1,388,455 | 55.02% | 234.3 | 20.65% | 54.9 | 5,672 KiB | 635,003 |
+| u 512 KiB | rvv_opt_m2 | 2,162,959 | 55.83% | 322.5 | 20.53% | 75.6 | 5,676 KiB | 745,874 |
+| u 2,048 KiB | scalar | 3,257,311 | 30.38% | 95.7 | 70.31% | 75.4 | 15,053 KiB | 1,843,588 |
+| u 2,048 KiB | rvv_orig | 2,085,448 | 59.27% | 243.2 | 70.42% | 193.9 | 15,048 KiB | 996,601 |
+| u 2,048 KiB | rvv_opt_m2 | 3,551,576 | 59.00% | 335.1 | 70.32% | 268.3 | 15,053 KiB | 1,153,887 |
+
+## SuiteSparse matrices (VLEN=256)
+
+| matrix | rows | nnz | mean row | row CV | lane util m1 | scalar | rvv_orig | rvv_opt_m1 | rvv_opt_m2 | rvv_acc2_m1 | rvv_acc2_m2 |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| bcsstk17 | 10,974 | 428,650 | 39.1 | 0.395 | 92.18% | 1,923,728 | 640,004 (3.01×) | 663,911 (2.90×) | 481,873 (3.99×) | 605,884 (3.18×) | – |
+| luxembourg_osm | 114,599 | 239,332 | 2.09 | 0.197 | 26.11% | 1,813,778 | 1,961,653 (0.92×) | 2,194,157 (0.83×) | 2,209,495 (0.82×) | 2,373,215 (0.76×) | 2,470,781 (0.73×) |
+| scircuit | 170,998 | 958,936 | 5.61 | 0.783 | 62.27% | 5,569,862 | 4,562,326 (1.22×) | 5,358,789 (1.04×) | – | 5,332,864 (1.04×) | – |
+| web-NotreDame | 325,729 | 1,497,134 | 4.6 | 4.67 | 71.99% | 8,444,826 | 5,063,309 (1.67×) | 5,779,569 (1.46×) | 5,275,552 (1.60×) | 6,423,643 (1.31×) | – |
+
+(speedup vs. scalar in brackets)
+
+## SpMM (Y = A·X, X has K dense columns), VLEN=256
+
+| input | K | spmm_scalar | spmm_rvv_vk | spmm_rvv_colwise | spmm_scalar cyc/(nnz·K) | spmm_rvv_vk cyc/(nnz·K) | spmm_rvv_colwise cyc/(nnz·K) | vk lane util |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|
+| bcsstk17 | 4 | 13,765,321 | 1,122,294 (12.27×) | 2,234,554 (6.16×) | 8.03 | 0.655 | 1.3 | 25.00% |
+| bcsstk17 | 8 | 27,475,142 | 1,131,235 (24.29×) | 4,236,485 (6.49×) | 8.01 | 0.33 | 1.24 | 50.00% |
+| bcsstk17 | 16 | 33,316,305 | 1,325,808 (25.13×) | 8,238,373 (4.04×) | 4.86 | 0.193 | 1.2 | 100.00% |
+| luxembourg_osm | 4 | 9,712,367 | 3,491,909 (2.78×) | 6,788,878 (1.43×) | 10.1 | 3.65 | 7.09 | 25.00% |
+| luxembourg_osm | 8 | 17,863,874 | 3,696,130 (4.83×) | 10,896,086 (1.64×) | 9.33 | 1.93 | 5.69 | 50.00% |
+| luxembourg_osm | 16 | 27,573,375 | 4,401,747 (6.26×) | 19,514,714 (1.41×) | 7.2 | 1.15 | 5.1 | 100.00% |
+| u_n1024_d01 | 4 | 329,166 | 37,801 (8.71×) | 75,349 (4.37×) | 8.01 | 0.92 | 1.83 | 25.00% |
+| u_n1024_d01 | 8 | 658,952 | 41,042 (16.06×) | 138,857 (4.75×) | 8.02 | 0.499 | 1.69 | 50.00% |
+| u_n1024_d01 | 16 | 952,224 | 55,129 (17.27×) | 267,217 (3.56×) | 5.79 | 0.335 | 1.63 | 100.00% |
+| u_n1024_d05 | 4 | 1,687,865 | 122,292 (13.80×) | 254,221 (6.64×) | 8 | 0.58 | 1.21 | 25.00% |
+| u_n1024_d05 | 8 | 3,376,890 | 159,363 (21.19×) | 584,256 (5.78×) | 8 | 0.378 | 1.38 | 50.00% |
+| u_n1024_d05 | 16 | 4,415,074 | 225,399 (19.59×) | 1,124,912 (3.92×) | 5.23 | 0.267 | 1.33 | 100.00% |
+| u_n1024_d20 | 4 | 6,747,289 | 470,765 (14.33×) | 952,883 (7.08×) | 8.01 | 0.559 | 1.13 | 25.00% |
+| u_n1024_d20 | 8 | 13,483,017 | 620,003 (21.75×) | 2,271,819 (5.93×) | 8 | 0.368 | 1.35 | 50.00% |
+| u_n1024_d20 | 16 | 17,147,835 | 855,756 (20.04×) | 5,026,493 (3.41×) | 5.09 | 0.254 | 1.49 | 100.00% |
+| u_r16384_c131072_npr16 | 4 | 10,054,615 | 3,480,137 (2.89×) | 6,681,582 (1.50×) | 9.59 | 3.32 | 6.37 | 25.00% |
+| u_r16384_c131072_npr16 | 8 | 18,415,803 | 3,712,714 (4.96×) | 8,350,609 (2.21×) | 8.78 | 1.77 | 3.98 | 50.00% |
+| u_r16384_c131072_npr16 | 16 | 34,929,190 | 4,543,095 (7.69×) | 11,183,172 (3.12×) | 8.33 | 1.08 | 2.67 | 100.00% |
+
+## VLEN sensitivity (cycles; speedup relative to VLEN=256 in brackets)
+
+| input | kernel | VLEN=128 | VLEN=256 | VLEN=512 |
+|---|---:|---:|---:|---:|
+| scircuit | rvv_opt_m1 | 6,027,079 (0.89×) | 5,358,789 | 5,043,538 (1.06×) |
+| scircuit | rvv_opt_m2 | – | – | 4,940,729 |
+| scircuit | rvv_orig | 4,962,467 (0.92×) | 4,562,326 | 4,356,581 (1.05×) |
+| u_n1024_d05 | dense_m2 | 767,703 (0.77×) | 590,030 | 2,257,635 (0.26×) |
+| u_n1024_d05 | dense_m4 | 593,669 (3.78×) | 2,244,889 | 507,298 (4.43×) |
+| u_n1024_d05 | rvv_acc2_m1 | 73,548 (0.88×) | 65,089 | 64,730 (1.01×) |
+| u_n1024_d05 | rvv_opt_m1 | 99,803 (0.67×) | 67,297 | 51,703 (1.30×) |
+| u_n1024_d05 | rvv_opt_m2 | 67,965 (0.75×) | 51,233 | 43,692 (1.17×) |
+| u_n1024_d05 | rvv_orig | 97,256 (0.68×) | 66,127 | 52,632 (1.26×) |
+| u_n1024_d20 | dense_m2 | 767,358 (0.77×) | 589,851 | 2,254,430 (0.26×) |
+| u_n1024_d20 | dense_m4 | 593,602 (3.66×) | 2,172,754 | 507,566 (4.28×) |
+| u_n1024_d20 | rvv_acc2_m1 | 256,543 (0.94×) | 239,892 | 223,222 (1.07×) |
+| u_n1024_d20 | rvv_opt_m1 | 412,736 (0.64×) | 263,566 | 200,032 (1.32×) |
+| u_n1024_d20 | rvv_opt_m2 | 245,705 (0.77×) | 190,286 | 188,938 (1.01×) |
+| u_n1024_d20 | rvv_orig | 327,760 (0.66×) | 216,890 | 196,761 (1.10×) |
+| u_n1024_d50 | dense_m2 | 767,453 (0.77×) | 589,160 | 2,258,679 (0.26×) |
+| u_n1024_d50 | dense_m4 | 593,821 (3.78×) | 2,245,423 | 507,019 (4.43×) |
+| u_n1024_d50 | rvv_acc2_m1 | 605,158 (0.95×) | 572,200 | 523,698 (1.09×) |
+| u_n1024_d50 | rvv_opt_m1 | 1,028,091 (0.63×) | 649,764 | 499,644 (1.30×) |
+| u_n1024_d50 | rvv_opt_m2 | 592,224 (0.83×) | 493,008 | 483,868 (1.02×) |
+| u_n1024_d50 | rvv_orig | 776,738 (0.67×) | 523,573 | 498,072 (1.05×) |
+| u_r16384_c008192_npr16 | rvv_acc2_m1 | 795,819 (0.92×) | 728,858 | 622,526 (1.17×) |
+| u_r16384_c008192_npr16 | rvv_opt_m1 | 1,150,866 (0.71×) | 822,708 | 616,195 (1.34×) |
+| u_r16384_c008192_npr16 | rvv_opt_m2 | 702,311 (0.82×) | 578,017 | 521,869 (1.11×) |
+| u_r16384_c008192_npr16 | rvv_orig | 772,009 (0.76×) | 586,735 | 536,591 (1.09×) |
+| u_r16384_c524288_npr16 | rvv_acc2_m1 | 5,432,185 (0.82×) | 4,448,845 | 4,108,609 (1.08×) |
+| u_r16384_c524288_npr16 | rvv_opt_m1 | 8,400,743 (0.68×) | 5,682,861 | 4,109,616 (1.38×) |
+| u_r16384_c524288_npr16 | rvv_opt_m2 | 4,875,549 (0.73×) | 3,551,576 | 3,565,058 (1.00×) |
+| u_r16384_c524288_npr16 | rvv_orig | 2,318,465 (0.90×) | 2,085,448 | 2,001,657 (1.04×) |
