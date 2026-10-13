@@ -22,8 +22,10 @@ OP_CLASSES = [
     "SimdConfig", "SimdMisc", "SimdMult", "SimdShift", "SimdFloatMult",
     "SimdFloatMultAcc", "SimdFloatReduceAdd", "SimdUnitStrideLoad",
     "SimdUnitStrideStore", "SimdIndexedLoad", "SimdStridedLoad",
+    "SimdUnitStrideMaskLoad", "SimdCmp", "SimdPredAlu", "SimdReduceAlu", "SimdMisc",
 ]
-_TAGS = {"CONFIG": "cfg_", "MATRIX": "mat_", "VECTOR": "vec_", "RESULT": "res_"}
+_TAGS = {"CONFIG": "cfg_", "MATRIX": "mat_", "VECTOR": "vec_", "RESULT": "res_",
+         "WORK": "work_", "HYBRID": "hyb_"}
 
 
 def _num(v):

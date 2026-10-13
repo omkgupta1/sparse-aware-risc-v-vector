@@ -41,7 +41,8 @@ $(BUILD)/spmv_rvv_resetdump: src/spmv_rvv_roi.c src/common/roi.h $(M5_LIB) | $(B
 OBJ      := $(BUILD)/obj
 HDRS     := $(wildcard src/*/*.h)
 BENCH_V  := harness/bench harness/matrix kernels/spmv_rvv_orig kernels/spmv_rvv_opt \
-            kernels/spmv_rvv_acc2 kernels/gemv_rvv kernels/spmm_rvv
+            kernels/spmv_rvv_acc2 kernels/gemv_rvv kernels/spmm_rvv \
+            kernels/gemv_mask kernels/hybrid
 # Kernels are 64-byte aligned so their timing does not depend on unrelated code
 # layout (measured: unaligned rvv_orig moved 4.7% between builds; aligned, a
 # 1 KiB address shift changes kernel cycles by <0.1%; see PROGRESS.md Phase 2).
@@ -89,9 +90,11 @@ $(M5_LIB):
 QEMU_CPU ?= rv64,v=true,vlen=256,elen=64
 qemu-test: $(BUILD)/bench_qemu
 	@fail=0; q="qemu-riscv64 -cpu $(QEMU_CPU) $(BUILD)/bench_qemu"; \
-	for k in scalar rvv_orig rvv_opt_m1 rvv_opt_m2 rvv_opt_m4 rvv_acc2_m1 rvv_acc2_m2 dense_m1 dense_m2 dense_m4; do \
+	for k in scalar rvv_orig rvv_opt_m1 rvv_opt_m2 rvv_opt_m4 rvv_acc2_m1 rvv_acc2_m2 dense_m1 dense_m2 dense_m4 \
+	         dense_skip_m1 dense_skip_m2 dense_compress_m1 dense_compress_slide_m1 hybrid; do \
 	  for in in "gen=midterm n=256 density=1" "gen=midterm n=256 density=60" "gen=midterm n=256 density=100" \
-	            "gen=uniform rows=300 cols=1000 density=7" "gen=powerlaw rows=500 cols=700 nnz_per_row=20"; do \
+	            "gen=uniform rows=300 cols=1000 density=7" "gen=powerlaw rows=500 cols=700 nnz_per_row=20" \
+	            "gen=mixed rows=640 cols=333 d_lo=3 d_hi=85 frac=0.4" "gen=mixed rows=300 cols=1000 d_lo=0 d_hi=100 frac=0.5 band=7"; do \
 	    $$q kernel=$$k $$in 2>/dev/null | grep RESULT || { echo "FAILED/CRASHED: $$k $$in"; fail=1; }; \
 	  done; done; \
 	for k in spmm_scalar spmm_rvv_vk spmm_rvv_colwise; do for kk in 1 4 8 16 37; do \

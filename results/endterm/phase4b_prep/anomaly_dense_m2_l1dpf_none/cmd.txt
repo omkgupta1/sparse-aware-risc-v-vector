@@ -1,0 +1,1 @@
+/workspace/gem5/build/RISCV/gem5.opt -d results/endterm/phase4b_prep/anomaly_dense_m2_l1dpf_none configs/sparse_rvv.py --binary build/bench --l1d-pf none --program-args kernel=dense_m2 gen=uniform n=1024 density=5 seed=1 

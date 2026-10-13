@@ -1,0 +1,1 @@
+/workspace/gem5/build/RISCV/gem5.opt -d results/endterm/phase2/gem5_rvv_check_minor configs/sparse_rvv.py --binary build/rvv_lmul_check --cpu minor 

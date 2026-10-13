@@ -1,0 +1,68 @@
+Global frequency set at 1000000000000 ticks per second
+src/arch/riscv/isa.cc:321: info: RVV enabled, VLEN = 256 bits, ELEN = 64 bits
+src/base/statistics.hh:279: warn: One of the stats is a legacy stat. Legacy stat is a stat that does not belong to any statistics::Group. Legacy stat is deprecated.
+src/base/stats/storage.hh:278: warn: Bucket size (4) does not divide range [1:32] into equal-sized buckets. Rounding up.
+src/base/stats/storage.hh:278: warn: Bucket size (4) does not divide range [1:8] into equal-sized buckets. Rounding up.
+src/base/remote_gdb.cc:418: warn: Sockets disabled, not accepting gdb connections
+gem5 Simulator System.  https://www.gem5.org
+gem5 is copyrighted software; use the --copyright option for details.
+
+gem5 version 25.1.0.1
+gem5 compiled Aug 29 2026 12:59:38
+gem5 started Oct 13 2026 18:14:05
+gem5 executing on c179f2c6135d, pid 819
+command line: /workspace/gem5/build/RISCV/gem5.opt -d results/endterm/phase4a_gem5_compress_investigation/o3_dense_compress_slide_m1_u_n256_d05 configs/sparse_rvv.py --binary build/bench --cpu o3 --program-args kernel=dense_compress_slide_m1 gen=uniform n=256 density=5
+
+info: Standard input is not a terminal, disabling listeners.
+sparse_rvv: cpu=o3 VLEN=256 ELEN=64 LQ=default SQ=default L1D=32KiB L2=512KiB
+Binary: /project/build/bench args: kernel=dense_compress_slide_m1 gen=uniform n=256 density=5
+src/sim/syscall_emul.cc:97: warn: ignoring syscall set_robust_list(...)
+      (further warnings will be suppressed)
+src/sim/syscall_emul.hh:1127: warn: readlink() called on '/proc/self/exe' may yield unexpected results in various settings.
+      Returning '/project/build/bench'
+src/sim/mem_state.cc:443: info: Increasing stack size by one page.
+src/sim/syscall_emul.cc:86: warn: ignoring syscall mprotect(...)
+CONFIG kernel=dense_compress_slide_m1 gen=uniform rows=256 cols=256 density_pct=5 nnz_per_row=0 alpha=1.8 seed=1 path=- k=1 warmup=1 cold=0 tol=0.0001 d_lo=5 d_hi=80 frac=0.25 band=64 block_rows=64 thr=58.2
+MATRIX rows=256 cols=256 nnz=3256 density_actual=0.0496826 row_len_min=6 row_len_max=22 row_len_mean=12.7188 row_len_cv=0.2447 empty_rows=0 csr_bytes=27076 x_bytes=1024
+VECTOR lmul=1 vlmax=8 chunks=8192 reg_chunks=8192 active_elems=65536 useful_elems=3256 lane_util=1.000000
+WORK scanned_chunks=8192 skipped_chunks=7676 arith_chunks=516 arith_lanes=3256 useful_lanes=3256 zero_lanes=0 useful_frac=1.000000
+src/sim/faults.cc:103: panic: panic condition !handled && !tc->getSystemPtr()->trapToGdb(GDBSignal::SEGV, tc->contextId()) occurred: Page table fault when accessing virtual address 0x1000a77fc
+Memory Usage: 8558124 KBytes
+Program aborted at tick 587012000
+--- BEGIN LIBC BACKTRACE ---
+/workspace/gem5/build/RISCV/gem5.opt(_ZN4gem515print_backtraceEv+0x40)[0xaaaabd853b40]
+/workspace/gem5/build/RISCV/gem5.opt(_ZN4gem512abortHandlerEi+0x60)[0xaaaabd87dff0]
+linux-vdso.so.1(__kernel_rt_sigreturn+0x0)[0xffffaa5f9800]
+/lib/aarch64-linux-gnu/libc.so.6(+0x874d8)[0xffffa92a74d8]
+/lib/aarch64-linux-gnu/libc.so.6(gsignal+0x1c)[0xffffa925cb3c]
+/lib/aarch64-linux-gnu/libc.so.6(abort+0xf4)[0xffffa9247e00]
+/workspace/gem5/build/RISCV/gem5.opt(+0xc85718)[0xaaaabc415718]
+/workspace/gem5/build/RISCV/gem5.opt(_ZN4gem521GenericPageTableFault6invokeEPNS_13ThreadContextERKNS_14RefCountingPtrINS_10StaticInstEEE+0x138)[0xaaaabd8f3f68]
+/workspace/gem5/build/RISCV/gem5.opt(_ZN4gem52o36Commit10commitHeadERKNS_14RefCountingPtrINS0_7DynInstEEEj+0x4f4)[0xaaaabc9932b4]
+/workspace/gem5/build/RISCV/gem5.opt(_ZN4gem52o36Commit11commitInstsEv+0x2f8)[0xaaaabc993f58]
+/workspace/gem5/build/RISCV/gem5.opt(_ZN4gem52o36Commit6commitEv+0x6cc)[0xaaaabc995250]
+/workspace/gem5/build/RISCV/gem5.opt(_ZN4gem52o36Commit4tickEv+0xc8)[0xaaaabc9956a8]
+/workspace/gem5/build/RISCV/gem5.opt(_ZN4gem52o33CPU4tickEv+0x158)[0xaaaabc99e0c8]
+/workspace/gem5/build/RISCV/gem5.opt(_ZN4gem510EventQueue10serviceOneEv+0xdc)[0xaaaabd86aacc]
+/workspace/gem5/build/RISCV/gem5.opt(_ZN4gem59doSimLoopEPNS_10EventQueueE+0xc8)[0xaaaabd89c428]
+/workspace/gem5/build/RISCV/gem5.opt(_ZN4gem58simulateEm+0x254)[0xaaaabd89cc54]
+/workspace/gem5/build/RISCV/gem5.opt(+0xe7c0fc)[0xaaaabc60c0fc]
+/workspace/gem5/build/RISCV/gem5.opt(+0xccb9d8)[0xaaaabc45b9d8]
+/lib/aarch64-linux-gnu/libpython3.12.so.1.0(+0x1d6754)[0xffffa9ed6754]
+/lib/aarch64-linux-gnu/libpython3.12.so.1.0(_PyObject_Call+0x64)[0xffffa9e80b74]
+/lib/aarch64-linux-gnu/libpython3.12.so.1.0(_PyEval_EvalFrameDefault+0x7a8)[0xffffa9e1af28]
+/lib/aarch64-linux-gnu/libpython3.12.so.1.0(PyEval_EvalCode+0x23c)[0xffffa9f8fd3c]
+/lib/aarch64-linux-gnu/libpython3.12.so.1.0(+0x28bff4)[0xffffa9f8bff4]
+/lib/aarch64-linux-gnu/libpython3.12.so.1.0(+0x1d6e00)[0xffffa9ed6e00]
+/lib/aarch64-linux-gnu/libpython3.12.so.1.0(PyObject_Vectorcall+0x58)[0xffffa9e7ee98]
+/lib/aarch64-linux-gnu/libpython3.12.so.1.0(_PyEval_EvalFrameDefault+0x395c)[0xffffa9e1e0dc]
+/workspace/gem5/build/RISCV/gem5.opt(+0xe55a84)[0xaaaabc5e5a84]
+/workspace/gem5/build/RISCV/gem5.opt(main+0x1a4)[0xaaaabc3f0904]
+/lib/aarch64-linux-gnu/libc.so.6(+0x284c4)[0xffffa92484c4]
+/lib/aarch64-linux-gnu/libc.so.6(__libc_start_main+0x98)[0xffffa9248598]
+/workspace/gem5/build/RISCV/gem5.opt(_start+0x30)[0xaaaabc4147f0]
+--- END LIBC BACKTRACE ---
+For more info on how to address this issue, please visit https://www.gem5.org/documentation/general_docs/common-errors/ 
+
+HOST_SECONDS=2
+EXIT_STATUS=134

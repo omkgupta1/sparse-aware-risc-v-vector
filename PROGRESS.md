@@ -9,8 +9,8 @@ script-generated file under `results/endterm/`; the source file is named next to
 | 1. Fix the measurement (ROI) | ✅ Done |
 | 2. Proper baselines | ✅ Done (rvv_opt_m4 excluded: gem5 O3 bug) |
 | 3. Realistic workloads and sweeps | ✅ Done (316 runs; LMUL=2 gather kernels unreliable on gem5 O3) |
-| 4A. Software sparse-aware mechanism | ⏳ Not started |
-| 4B. Hardware mechanism (indirect gather prefetcher, chosen 2026-10-13) | ⏳ Not started; gem5 C++ changes need approval first |
+| 4A. Software sparse-aware mechanism | ✅ Done (128/128 validated) |
+| 4B. Hardware mechanism (indirect gather prefetcher, chosen 2026-10-13) | ⏳ Feasibility study done; waiting for approval of the gem5 C++ change |
 | 5. Metrics, analysis, plots | ⏳ Not started |
 | 6. Reproducibility and documentation | ⏳ Partly started (Makefile, Docker env, gem5 issue write-up) |
 
@@ -178,3 +178,36 @@ ROI cycles (speedup vs. scalar):
 1. **gem5 Issue 2 now affects LMUL=2 gathers, not just LMUL=4.** Under the current policy (option a) all claims use LMUL=1 gathers, which have never failed. This is enough for Phase 4, since the prefetcher targets m1 gathers. An LMUL sweep for gathers is not possible on gem5 O3 without fixing the bug.
 2. **Dense GEMV loads of exactly 128 bytes** (m4@VLEN256, m2@VLEN512) are about 3.8× slower than 64-byte or 256-byte loads, with correct results. Cause unknown; to examine with the prefetcher work (`docs/gem5_rvv_issues.md`).
 3. The `results/endterm` total is now 32 MB (`stats.txt.gz` + `config.ini.gz` + logs). That's fine for git, but Phase 4/5 should avoid unnecessary reruns.
+
+## Phase 4A: Software sparse-aware mechanisms (2026-10-13/14)
+
+**Done**
+- `src/kernels/gemv_mask.c`, on dense-format input:
+  - `dense_skip_m{1,2}`: `vmfne` nonzero mask + `vcpop`. All-zero chunks skip the `x` load and the FMA; other chunks use a masked load and a masked `vfmacc` (tail- and mask-undisturbed).
+  - `dense_compress_m1`: `vcompress` packs nonzero values and column indices across chunks into a memory staging buffer. Arithmetic runs only on full vectors of useful elements (one LMUL=1 gather + one full-width `vfmacc`).
+  - `dense_compress_slide_m1`: the register-merging variant, kept only as the gem5 Issue 3 reproducer.
+- `src/kernels/hybrid.c`, a **density-aware hybrid**: 64-row blocks at or above a threshold (default **58.2% = the measured Phase 3 crossover**) are stored and run densely (the `dense_m2` loop); the others as CSR (the `rvv_orig` loop).
+- `gen=mixed` generator: 64-row bands at density `hi` with probability `f`, else `lo`.
+- The harness prints `WORK` lines (chunks scanned/skipped, lanes issued, useful lanes, zero lanes) and `HYBRID` lines (dense blocks chosen). Cross-checked against gem5: LMUL=1 `arith_chunks` equals committed `SimdFloatMultAcc` micro-ops in **36/36** runs.
+- `make qemu-test`: 120/120 pass (also with QEMU `rvv_ta_all_1s`/`rvv_ma_all_1s` for the compaction kernel).
+- `scripts/run_phase4a.sh` (128 runs; baselines re-run with the same binary), `scripts/phase4a_report.py` → `results/endterm/phase4a/phase4a_{all.csv,summary.md}`.
+
+**Results** (source: `results/endterm/phase4a/phase4a_summary.md`; 1024×1024, O3, VLEN=256; **128/128 runs validated**)
+1. **Mask-based skipping is never faster than the plain dense kernel:** 0.45–1.00×.
+   - At 1% density it skips 92.4% of chunks.
+   - But every element of A must still be loaded to build the mask, and `vcpop` plus the branch per chunk costs more than the skipped `x` load and FMA.
+   - Only 13–80% of the lanes it issues are useful.
+2. **On-the-fly compaction makes the arithmetic 100% useful but is 1.3–6.3× slower than dense** (0.16–0.75×) and 5.9–36.4× slower than CSR. Packing costs far more per element than the FMA it saves. Compaction pays only when done once, ahead of time; that is exactly what the CSR format is.
+3. **The density-aware hybrid always matches or beats the better single format:**
+   - uniform matrices: 1.00–1.01× of the better of CSR and dense (CSR below 58.2%, all 16 blocks dense at 60% and 80%);
+   - **mixed-density matrices: 1.15–1.60× faster than the best single-format kernel** and 5.79–7.62× faster than scalar CSR.
+   - Threshold sensitivity: 40% vs. 58.2% differ by <0.5%. At 75%, the 70%-density bands stay in CSR and the `lo20_hi70` case is 1.15× slower (469,196 vs. 406,959 cycles).
+4. Main conclusion for the architecture: zero-skipping on dense data cannot remove the cost of *reading* zeros. The win comes from choosing the representation per region (hybrid) and, for sparse regions, from making the irregular gathers cheaper (Phase 4B).
+
+**Failed / fixed**
+- **gem5 Issue 3:** the register-slide compaction (`vslideup`/`vslidedown`, tu) faults on O3 (page-table fault on a gathered address), while passing on QEMU (also with agnostic = all-ones) and MinorCPU. The first 4A batch was stopped, the kernel rewritten with memory staging, and all 128 runs re-run with the final binary. Evidence: `results/endterm/phase4a_gem5_compress_investigation/`.
+- Issue 1's directed test now also runs on MinorCPU, where it matches QEMU exactly, so all three issues are O3-specific (`results/endterm/phase2/gem5_rvv_check_minor/`).
+
+**Phase 4B preparation (no gem5 source changes)**
+- `configs/sparse_rvv.py` gains `--l1d-pf/--l2-pf {stride (default), none, <prefetcher class>}`. The default reproduces an earlier run exactly: `rvv_orig` d=5% gives 66,135 cycles in both cases.
+- **The 128-byte dense-load anomaly is explained:** with 128-byte vector loads and the L2 stride prefetcher active, the L1D stride prefetcher fails to train (947 vs. about 252K prefetches identified). With the L2 prefetcher off, `dense_m4` takes 838,938 cycles instead of 2,253,972. Details are in `docs/gem5_rvv_issues.md`.

@@ -1,8 +1,9 @@
 """gem5 SE configuration for the end-term experiments.
 
 Defaults reproduce the midterm machine exactly (configs/rvv_test.py):
-RiscvO3CPU @ 1 GHz, VLEN=256/ELEN=64, private 32 KiB L1I/L1D + 512 KiB L2,
-single-channel DDR3-1600. Options only change what they name.
+RiscvO3CPU @ 1 GHz, VLEN=256/ELEN=64, private 32 KiB L1I/L1D + 512 KiB L2
+(stride prefetchers on L1D and L2), single-channel DDR3-1600. Options only
+change what they name.
 
     gem5.opt -d OUT configs/sparse_rvv.py --binary BIN [options] \
         --program-args key=value ...
@@ -10,7 +11,8 @@ single-channel DDR3-1600. Options only change what they name.
 import argparse
 import os
 
-from m5.objects import RiscvMinorCPU, RiscvO3CPU, RiscvTimingSimpleCPU
+import m5.objects
+from m5.objects import NULL, RiscvMinorCPU, RiscvO3CPU, RiscvTimingSimpleCPU
 
 from gem5.components.boards.simple_board import SimpleBoard
 from gem5.components.cachehierarchies.classic.private_l1_private_l2_cache_hierarchy import (
@@ -35,8 +37,41 @@ parser.add_argument("--sq-entries", type=int, default=None, help="O3 store queue
 parser.add_argument("--l1d-size", default="32KiB")
 parser.add_argument("--l1i-size", default="32KiB")
 parser.add_argument("--l2-size", default="512KiB")
+parser.add_argument("--l1d-pf", default="stride",
+                    help="L1D prefetcher: stride (default), none, or a gem5 prefetcher "
+                         "SimObject class name (e.g. VectorIndirectPrefetcher)")
+parser.add_argument("--l2-pf", default="stride", help="L2 prefetcher: stride (default) or none")
 parser.add_argument("--program-args", nargs="*", default=[])
 args = parser.parse_args()
+
+
+def make_prefetcher(name):
+    if name == "none":
+        return NULL
+    if name == "stride":
+        return m5.objects.StridePrefetcher()
+    return getattr(m5.objects, name)()
+
+
+class PrefetchSelectableHierarchy(PrivateL1PrivateL2CacheHierarchy):
+    """The stdlib private L1/L2 hierarchy with selectable L1D/L2 prefetchers.
+
+    The parent builds its caches (each with a StridePrefetcher) inside
+    incorporate_cache(); the requested prefetchers replace those afterwards.
+    With both set to "stride" nothing is changed.
+    """
+
+    def __init__(self, l1d_pf, l2_pf, **kwargs):
+        super().__init__(**kwargs)
+        self._l1d_pf, self._l2_pf = l1d_pf, l2_pf
+
+    def incorporate_cache(self, board):
+        super().incorporate_cache(board)
+        for i in range(board.get_processor().get_num_cores()):
+            if self._l1d_pf != "stride":
+                getattr(self, f"l1d-cache-{i}").prefetcher = make_prefetcher(self._l1d_pf)
+            if self._l2_pf != "stride":
+                getattr(self, f"l2-cache-{i}").prefetcher = make_prefetcher(self._l2_pf)
 
 
 class RVVCore(BaseCPUCore):
@@ -60,16 +95,18 @@ board = SimpleBoard(
     clk_freq="1GHz",
     processor=BaseCPUProcessor(cores=[RVVCore()]),
     memory=SingleChannelDDR3_1600(),
-    cache_hierarchy=PrivateL1PrivateL2CacheHierarchy(
+    cache_hierarchy=PrefetchSelectableHierarchy(
+        args.l1d_pf, args.l2_pf,
         l1d_size=args.l1d_size, l1i_size=args.l1i_size, l2_size=args.l2_size,
     ),
 )
+
 board.set_se_binary_workload(
     FileResource(local_path=binary_path), arguments=args.program_args,
 )
 
 print(f"sparse_rvv: cpu={args.cpu} VLEN={args.vlen} ELEN={args.elen} "
       f"LQ={args.lq_entries or 'default'} SQ={args.sq_entries or 'default'} "
-      f"L1D={args.l1d_size} L2={args.l2_size}")
+      f"L1D={args.l1d_size} L2={args.l2_size} l1d_pf={args.l1d_pf} l2_pf={args.l2_pf}")
 print(f"Binary: {binary_path} args: {' '.join(args.program_args)}")
 Simulator(board=board).run()

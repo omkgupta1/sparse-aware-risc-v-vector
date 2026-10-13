@@ -1,0 +1,1 @@
+/workspace/gem5/build/RISCV/gem5.opt -d results/endterm/phase4a_gem5_compress_investigation/o3_dense_compress_slide_m1_u_n256_d05 configs/sparse_rvv.py --binary build/bench --cpu o3 --program-args kernel=dense_compress_slide_m1 gen=uniform n=256 density=5 

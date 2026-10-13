@@ -1,0 +1,31 @@
+Global frequency set at 1000000000000 ticks per second
+src/arch/riscv/isa.cc:321: info: RVV enabled, VLEN = 256 bits, ELEN = 64 bits
+src/base/statistics.hh:279: warn: One of the stats is a legacy stat. Legacy stat is a stat that does not belong to any statistics::Group. Legacy stat is deprecated.
+src/base/stats/storage.hh:278: warn: Bucket size (4) does not divide range [1:32] into equal-sized buckets. Rounding up.
+src/base/stats/storage.hh:278: warn: Bucket size (4) does not divide range [1:8] into equal-sized buckets. Rounding up.
+src/base/remote_gdb.cc:418: warn: Sockets disabled, not accepting gdb connections
+gem5 Simulator System.  https://www.gem5.org
+gem5 is copyrighted software; use the --copyright option for details.
+
+gem5 version 25.1.0.1
+gem5 compiled Aug 29 2026 12:59:38
+gem5 started Oct 13 2026 18:14:05
+gem5 executing on c179f2c6135d, pid 820
+command line: /workspace/gem5/build/RISCV/gem5.opt -d results/endterm/phase4a_gem5_compress_investigation/o3_dense_compress_m1_u_n256_d05 configs/sparse_rvv.py --binary build/bench --cpu o3 --program-args kernel=dense_compress_m1 gen=uniform n=256 density=5
+
+info: Standard input is not a terminal, disabling listeners.
+sparse_rvv: cpu=o3 VLEN=256 ELEN=64 LQ=default SQ=default L1D=32KiB L2=512KiB
+Binary: /project/build/bench args: kernel=dense_compress_m1 gen=uniform n=256 density=5
+src/sim/syscall_emul.cc:97: warn: ignoring syscall set_robust_list(...)
+      (further warnings will be suppressed)
+src/sim/syscall_emul.hh:1127: warn: readlink() called on '/proc/self/exe' may yield unexpected results in various settings.
+      Returning '/project/build/bench'
+src/sim/mem_state.cc:443: info: Increasing stack size by one page.
+src/sim/syscall_emul.cc:86: warn: ignoring syscall mprotect(...)
+CONFIG kernel=dense_compress_m1 gen=uniform rows=256 cols=256 density_pct=5 nnz_per_row=0 alpha=1.8 seed=1 path=- k=1 warmup=1 cold=0 tol=0.0001 d_lo=5 d_hi=80 frac=0.25 band=64 block_rows=64 thr=58.2
+MATRIX rows=256 cols=256 nnz=3256 density_actual=0.0496826 row_len_min=6 row_len_max=22 row_len_mean=12.7188 row_len_cv=0.2447 empty_rows=0 csr_bytes=27076 x_bytes=1024
+VECTOR lmul=1 vlmax=8 chunks=8192 reg_chunks=8192 active_elems=65536 useful_elems=3256 lane_util=1.000000
+WORK scanned_chunks=8192 skipped_chunks=7676 arith_chunks=516 arith_lanes=3256 useful_lanes=3256 zero_lanes=0 useful_frac=1.000000
+RESULT kernel=dense_compress_m1 nnz=3256 checksum=958.422484994 max_rel_err=1.575879e-07 bad_rows=0 validation=PASSED
+HOST_SECONDS=3
+EXIT_STATUS=0

@@ -1,0 +1,1 @@
+/workspace/gem5/build/RISCV/gem5.opt -d results/endterm/phase4a/mixed/mx_n1024_lo01_hi80_f025/dense_compress_m1 configs/sparse_rvv.py --binary build/bench --program-args kernel=dense_compress_m1 gen=mixed n=1024 d_lo=1 d_hi=80 frac=0.25 band=64 seed=1 

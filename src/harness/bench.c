@@ -8,13 +8,21 @@
  *   gen=midterm  n=256 density=20              midterm O(n^2) pattern (integer %)
  *   gen=uniform  rows= cols= (or n=) density=<%> | nnz_per_row=<avg>  [seed=1]
  *   gen=powerlaw rows= cols= (or n=) density=<%> | nnz_per_row=<avg>  [alpha=1.8] [seed=1]
+ *   gen=mixed    rows= cols= (or n=) d_lo=<%> d_hi=<%> frac=<0..1> [band=64] [seed=1]
+ *                                              bands of rows at d_hi (prob. frac) or d_lo
  *   gen=file     path=<matrix.csr>             binary CSR from scripts/mtx2bin.py
  *   k=8                                        dense columns for SpMM kernels
  *
  * Kernels: SpMV  scalar rvv_orig rvv_opt_m1 rvv_opt_m2 rvv_opt_m4
  *                rvv_acc2_m1 rvv_acc2_m2
  *          GEMV  dense_m1 dense_m2 dense_m4  (densified copy of the same matrix)
+ *                dense_skip_m1 dense_skip_m2 dense_compress_m1   (Phase 4A, masks)
+ *                dense_compress_slide_m1  (gem5 O3 bug reproducer, Issue 3)
+ *          HYB   hybrid [block_rows=64] [thr=58.2]  (Phase 4A, density-aware)
  *          SpMM  spmm_scalar spmm_rvv_vk spmm_rvv_colwise
+ *
+ * Besides RESULT, the program prints a WORK line with exact (matrix-derived)
+ * counts of chunks scanned / skipped, lanes issued to arithmetic, useful lanes.
  *
  * Sequence: build input -> (dense kernels: densify) -> `warmup` untimed runs
  * of the same kernel -> (cold=1: evict caches by streaming an 8x-L2 buffer)
@@ -34,7 +42,8 @@
 #include "harness/matrix.h"
 #include "kernels/kernels.h"
 
-typedef enum { K_SPMV, K_GEMV, K_SPMM } kind_t;
+typedef enum { K_SPMV, K_GEMV, K_SPMM, K_HYBRID } kind_t;
+typedef enum { W_STD, W_SKIP, W_COMPRESS } work_t;  /* how a GEMV kernel treats zeros */
 
 typedef struct {
     const char *name;
@@ -44,29 +53,35 @@ typedef struct {
     spmm_fn spmm;
     int lmul;      /* vector register group size (0 = scalar) */
     int over_k;    /* SpMM: vectorised over the k dense columns */
+    work_t work;
 } kernel_t;
 
 static const kernel_t KERNELS[] = {
-    {"scalar",           K_SPMV, spmv_scalar,      NULL,        NULL,             0, 0},
-    {"rvv_orig",         K_SPMV, spmv_rvv_orig,    NULL,        NULL,             1, 0},
-    {"rvv_opt_m1",       K_SPMV, spmv_rvv_opt_m1,  NULL,        NULL,             1, 0},
-    {"rvv_opt_m2",       K_SPMV, spmv_rvv_opt_m2,  NULL,        NULL,             2, 0},
-    {"rvv_opt_m4",       K_SPMV, spmv_rvv_opt_m4,  NULL,        NULL,             4, 0},
-    {"rvv_acc2_m1",      K_SPMV, spmv_rvv_acc2_m1, NULL,        NULL,             1, 0},
-    {"rvv_acc2_m2",      K_SPMV, spmv_rvv_acc2_m2, NULL,        NULL,             2, 0},
-    {"dense_m1",         K_GEMV, NULL,             gemv_rvv_m1, NULL,             1, 0},
-    {"dense_m2",         K_GEMV, NULL,             gemv_rvv_m2, NULL,             2, 0},
-    {"dense_m4",         K_GEMV, NULL,             gemv_rvv_m4, NULL,             4, 0},
-    {"spmm_scalar",      K_SPMM, NULL,             NULL,        spmm_scalar,      0, 0},
-    {"spmm_rvv_vk",      K_SPMM, NULL,             NULL,        spmm_rvv_vk,      2, 1},
-    {"spmm_rvv_colwise", K_SPMM, NULL,             NULL,        spmm_rvv_colwise, 1, 0},
+    {"scalar",           K_SPMV, spmv_scalar,      NULL,        NULL,             0, 0, W_STD},
+    {"rvv_orig",         K_SPMV, spmv_rvv_orig,    NULL,        NULL,             1, 0, W_STD},
+    {"rvv_opt_m1",       K_SPMV, spmv_rvv_opt_m1,  NULL,        NULL,             1, 0, W_STD},
+    {"rvv_opt_m2",       K_SPMV, spmv_rvv_opt_m2,  NULL,        NULL,             2, 0, W_STD},
+    {"rvv_opt_m4",       K_SPMV, spmv_rvv_opt_m4,  NULL,        NULL,             4, 0, W_STD},
+    {"rvv_acc2_m1",      K_SPMV, spmv_rvv_acc2_m1, NULL,        NULL,             1, 0, W_STD},
+    {"rvv_acc2_m2",      K_SPMV, spmv_rvv_acc2_m2, NULL,        NULL,             2, 0, W_STD},
+    {"dense_m1",         K_GEMV, NULL,             gemv_rvv_m1, NULL,             1, 0, W_STD},
+    {"dense_m2",         K_GEMV, NULL,             gemv_rvv_m2, NULL,             2, 0, W_STD},
+    {"dense_m4",         K_GEMV, NULL,             gemv_rvv_m4, NULL,             4, 0, W_STD},
+    {"dense_skip_m1",    K_GEMV, NULL,             gemv_skip_m1, NULL,            1, 0, W_SKIP},
+    {"dense_skip_m2",    K_GEMV, NULL,             gemv_skip_m2, NULL,            2, 0, W_SKIP},
+    {"dense_compress_m1", K_GEMV, NULL,            gemv_compress_m1, NULL,        1, 0, W_COMPRESS},
+    {"dense_compress_slide_m1", K_GEMV, NULL,      gemv_compress_slide_m1, NULL,  1, 0, W_COMPRESS},
+    {"hybrid",           K_HYBRID, NULL,           NULL,        NULL,             1, 0, W_STD},
+    {"spmm_scalar",      K_SPMM, NULL,             NULL,        spmm_scalar,      0, 0, W_STD},
+    {"spmm_rvv_vk",      K_SPMM, NULL,             NULL,        spmm_rvv_vk,      2, 1, W_STD},
+    {"spmm_rvv_colwise", K_SPMM, NULL,             NULL,        spmm_rvv_colwise, 1, 0, W_STD},
 };
 #define NUM_KERNELS (sizeof(KERNELS) / sizeof(KERNELS[0]))
 
 typedef struct {
     const char *kernel, *gen, *path;
-    uint32_t rows, cols, k, warmup, cold, verbose;
-    double density_pct, nnz_per_row, alpha, tol;
+    uint32_t rows, cols, k, warmup, cold, verbose, band, block_rows;
+    double density_pct, nnz_per_row, alpha, tol, d_lo, d_hi, frac, thr;
     uint64_t seed;
 } opts_t;
 
@@ -81,7 +96,8 @@ static void usage(const char *msg)
 
 static opts_t parse(int argc, char **argv)
 {
-    opts_t o = {NULL, "midterm", NULL, 256, 256, 8, 1, 0, 0, 20.0, 0.0, 1.8, 1e-4, 1};
+    opts_t o = {NULL, "midterm", NULL, 256, 256, 8, 1, 0, 0, 64, 64,
+                20.0, 0.0, 1.8, 1e-4, 5.0, 80.0, 0.25, 58.2, 1};
     for (int i = 1; i < argc; i++) {
         char *eq = strchr(argv[i], '=');
         if (!eq)
@@ -103,12 +119,20 @@ static opts_t parse(int argc, char **argv)
         else if (!strcmp(key, "cold")) o.cold = (uint32_t)strtoul(v, NULL, 10);
         else if (!strcmp(key, "tol")) o.tol = strtod(v, NULL);
         else if (!strcmp(key, "verbose")) o.verbose = (uint32_t)strtoul(v, NULL, 10);
+        else if (!strcmp(key, "d_lo")) o.d_lo = strtod(v, NULL);
+        else if (!strcmp(key, "d_hi")) o.d_hi = strtod(v, NULL);
+        else if (!strcmp(key, "frac")) o.frac = strtod(v, NULL);
+        else if (!strcmp(key, "band")) o.band = (uint32_t)strtoul(v, NULL, 10);
+        else if (!strcmp(key, "block_rows")) o.block_rows = (uint32_t)strtoul(v, NULL, 10);
+        else if (!strcmp(key, "thr")) o.thr = strtod(v, NULL);
         else usage("unknown key");
     }
     if (!o.kernel)
         usage("kernel= is required");
     if (o.k < 1 || o.k > SPMM_MAX_K)
         usage("k must be 1..64");
+    if (!o.band || !o.block_rows)
+        usage("band and block_rows must be > 0");
     return o;
 }
 
@@ -136,6 +160,11 @@ static void build_input(opts_t *o, csr_t *A)
             usage("density must be in (0, 100]");
         gen_random(A, o->rows, o->cols, density,
                    !strcmp(o->gen, "uniform") ? DIST_UNIFORM : DIST_POWERLAW, o->alpha, o->seed);
+    } else if (!strcmp(o->gen, "mixed")) {
+        if (!o->rows || !o->cols || o->d_lo < 0 || o->d_hi > 100 || o->d_lo > o->d_hi ||
+            o->frac < 0 || o->frac > 1)
+            usage("gen=mixed needs rows/cols, 0 <= d_lo <= d_hi <= 100, 0 <= frac <= 1");
+        gen_mixed(A, o->rows, o->cols, o->d_lo / 100.0, o->d_hi / 100.0, o->frac, o->band, o->seed);
     } else if (!strcmp(o->gen, "file")) {
         if (!o->path)
             usage("gen=file needs path=");
@@ -158,12 +187,13 @@ static void evict_caches(void)
 }
 
 static void run_kernel(const kernel_t *K, const csr_t *A, const float *D,
-                       const float *x, uint32_t k, float *y)
+                       const hybrid_t *H, const float *x, uint32_t k, float *y)
 {
     switch (K->kind) {
     case K_SPMV: K->spmv(A, x, y); break;
     case K_GEMV: K->gemv(D, A->rows, A->cols, x, y); break;
     case K_SPMM: K->spmm(A, x, k, y); break;
+    case K_HYBRID: spmv_hybrid(H, x, y); break;
     }
 }
 
@@ -210,9 +240,88 @@ static void print_matrix_info(const csr_t *A)
            (unsigned long long)A->cols * 4);
 }
 
+/* Rows [r0, r1) as CSR with vlmax: arithmetic chunks = sum ceil(len / vlmax). */
+static uint64_t csr_chunks(const csr_t *A, uint32_t r0, uint32_t r1, uint32_t vlmax)
+{
+    uint64_t c = 0;
+    for (uint32_t i = r0; i < r1; i++)
+        c += (A->row_ptr[i + 1] - A->row_ptr[i] + vlmax - 1) / vlmax;
+    return c;
+}
+
+/*
+ * WORK line (SpMV / GEMV / hybrid): exact counts derived from the matrix.
+ *   scanned_chunks  vector chunks the kernel loops over
+ *   skipped_chunks  chunks that issue no arithmetic (all-zero, dense_skip only)
+ *   arith_chunks    chunks that issue the multiply-accumulate
+ *   arith_lanes     lanes those ops process (sum of vl; masked-off lanes count)
+ *   useful_lanes    lanes holding a nonzero (= nnz)
+ *   zero_lanes      arith_lanes - useful_lanes (work spent on zeros)
+ */
+static void print_work(const kernel_t *K, const csr_t *A, const hybrid_t *H)
+{
+    if (K->kind == K_SPMM || !K->lmul)
+        return;
+    uint64_t scanned = 0, arith = 0, lanes = 0;
+    const uint64_t useful = A->nnz;
+    if (K->kind == K_SPMV) {
+        scanned = arith = csr_chunks(A, 0, A->rows, vlmax_e32(K->lmul));
+        lanes = A->nnz;
+    } else if (K->kind == K_GEMV) {
+        uint32_t vlmax = vlmax_e32(K->lmul);
+        scanned = (uint64_t)A->rows * ((A->cols + vlmax - 1) / vlmax);
+        if (K->work == W_STD) {
+            arith = scanned;
+            lanes = (uint64_t)A->rows * A->cols;
+        } else if (K->work == W_SKIP) {
+            /* a processed chunk issues vl lanes (vlmax except the row tail) */
+            for (uint32_t i = 0; i < A->rows; i++) {
+                uint32_t last = UINT32_MAX;
+                for (uint32_t p = A->row_ptr[i]; p < A->row_ptr[i + 1]; p++) {
+                    uint32_t ch = A->col_idx[p] / vlmax;
+                    if (ch != last) {
+                        uint32_t start = ch * vlmax;
+                        arith++;
+                        lanes += A->cols - start < vlmax ? A->cols - start : vlmax;
+                    }
+                    last = ch;
+                }
+            }
+        } else { /* W_COMPRESS: packed full-width ops, one partial flush per row */
+            arith = csr_chunks(A, 0, A->rows, vlmax);
+            lanes = A->nnz;
+        }
+    } else { /* K_HYBRID */
+        uint32_t v1 = vlmax_e32(1), v2 = vlmax_e32(2);
+        for (uint32_t b = 0; b < H->nblocks; b++) {
+            uint32_t r0 = b * H->block_rows;
+            uint32_t r1 = r0 + H->block_rows < A->rows ? r0 + H->block_rows : A->rows;
+            if (H->dense[b]) {
+                uint64_t c = (uint64_t)(r1 - r0) * ((A->cols + v2 - 1) / v2);
+                scanned += c;
+                arith += c;
+                lanes += (uint64_t)(r1 - r0) * A->cols;
+            } else {
+                uint64_t c = csr_chunks(A, r0, r1, v1);
+                scanned += c;
+                arith += c;
+                lanes += A->row_ptr[r1] - A->row_ptr[r0];
+            }
+        }
+        printf("HYBRID block_rows=%u thr_pct=%g blocks=%u dense_blocks=%u dense_rows=%u dense_nnz=%llu\n",
+               H->block_rows, H->thr_pct, H->nblocks, H->dense_blocks, H->dense_rows,
+               (unsigned long long)H->dense_nnz);
+    }
+    printf("WORK scanned_chunks=%llu skipped_chunks=%llu arith_chunks=%llu arith_lanes=%llu "
+           "useful_lanes=%llu zero_lanes=%llu useful_frac=%.6f\n",
+           (unsigned long long)scanned, (unsigned long long)(scanned - arith),
+           (unsigned long long)arith, (unsigned long long)lanes, (unsigned long long)useful,
+           (unsigned long long)(lanes - useful), lanes ? (double)useful / lanes : 0.0);
+}
+
 static void print_vector_info(const kernel_t *K, const csr_t *A, uint32_t k)
 {
-    if (!K->lmul)
+    if (!K->lmul || K->kind == K_HYBRID)
         return;
     uint32_t vlmax = vlmax_e32(K->lmul);
     uint64_t chunks = count_chunks(K, A, k, vlmax);
@@ -239,22 +348,29 @@ int main(int argc, char **argv)
     float *x = K->kind == K_SPMM ? make_X(A.cols, k) : make_x(A.cols);
     float *y = xalloc(ny * sizeof(float));
     float *D = K->kind == K_GEMV ? csr_to_dense(&A) : NULL;
+    hybrid_t H;
+    memset(&H, 0, sizeof(H));
+    if (K->kind == K_HYBRID)
+        hybrid_build(&H, &A, o.block_rows, o.thr);
 
     printf("CONFIG kernel=%s gen=%s rows=%u cols=%u density_pct=%g nnz_per_row=%g "
-           "alpha=%g seed=%llu path=%s k=%u warmup=%u cold=%u tol=%g\n",
+           "alpha=%g seed=%llu path=%s k=%u warmup=%u cold=%u tol=%g d_lo=%g d_hi=%g "
+           "frac=%g band=%u block_rows=%u thr=%g\n",
            K->name, o.gen, A.rows, A.cols, o.density_pct, o.nnz_per_row, o.alpha,
-           (unsigned long long)o.seed, o.path ? o.path : "-", k, o.warmup, o.cold, o.tol);
+           (unsigned long long)o.seed, o.path ? o.path : "-", k, o.warmup, o.cold, o.tol,
+           o.d_lo, o.d_hi, o.frac, o.band, o.block_rows, o.thr);
     print_matrix_info(&A);
     print_vector_info(K, &A, k);
+    print_work(K, &A, &H);
 
     for (uint32_t w = 0; w < o.warmup; w++)
-        run_kernel(K, &A, D, x, k, y);
+        run_kernel(K, &A, D, &H, x, k, y);
     memset(y, 0, ny * sizeof(float));
     if (o.cold)
         evict_caches();
 
     ROI_BEGIN();
-    run_kernel(K, &A, D, x, k, y);
+    run_kernel(K, &A, D, &H, x, k, y);
     ROI_END();
 
     double *ref = xalloc(ny * sizeof(double));

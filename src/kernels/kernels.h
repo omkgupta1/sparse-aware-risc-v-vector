@@ -40,6 +40,25 @@ void gemv_rvv_m1(const float *D, uint32_t rows, uint32_t cols, const float *x, f
 void gemv_rvv_m2(const float *D, uint32_t rows, uint32_t cols, const float *x, float *y);
 void gemv_rvv_m4(const float *D, uint32_t rows, uint32_t cols, const float *x, float *y);
 
+/* Phase 4A: sparse-aware execution on dense-format input (gemv_mask.c). */
+void gemv_skip_m1(const float *D, uint32_t rows, uint32_t cols, const float *x, float *y);
+void gemv_skip_m2(const float *D, uint32_t rows, uint32_t cols, const float *x, float *y);
+void gemv_compress_m1(const float *D, uint32_t rows, uint32_t cols, const float *x, float *y);
+void gemv_compress_slide_m1(const float *D, uint32_t rows, uint32_t cols, const float *x, float *y);
+
+/* Phase 4A: density-aware hybrid (hybrid.c). Row blocks whose density is
+ * >= thr_pct are stored and executed densely, the others as CSR. */
+typedef struct {
+    const csr_t *A;
+    uint32_t block_rows, nblocks;
+    double thr_pct;
+    float **dense;          /* per block: dense copy, or NULL for CSR blocks */
+    uint32_t dense_blocks, dense_rows;
+    uint64_t dense_nnz;
+} hybrid_t;
+void hybrid_build(hybrid_t *H, const csr_t *A, uint32_t block_rows, double thr_pct);
+void spmv_hybrid(const hybrid_t *H, const float *x, float *y);
+
 /* Scalar reference in double precision (compiled with -march=rv64gc and
  * -fno-tree-vectorize). abs_out[i] = sum_k |a_ik * x_k|, used to scale the
  * relative error tolerance. */

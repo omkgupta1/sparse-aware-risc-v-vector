@@ -1,6 +1,6 @@
 # gem5 25.1 RVV Correctness Issues Found in This Project
 
-Two functional bugs in gem5 25.1.0.1's **O3 CPU** model were found while validating the Phase 2 kernels. Both produce wrong *architectural results*, not just wrong timing. Both are timing-dependent and only appear at LMUL ≥ 2.
+Three functional bugs in gem5 25.1.0.1's **O3 CPU** model were found while validating the kernels (Phases 2–4). All produce wrong *architectural results* or crashes, not just wrong timing, and none occur on gem5's in-order MinorCPU or on QEMU. Issues 1 and 2 need LMUL ≥ 2; Issue 3 occurs at LMUL=1 with tail-undisturbed slides.
 
 All the evidence can be regenerated with:
 
@@ -51,6 +51,8 @@ vfmv.f.s ft0, v2
 - A store in between changes *how many* registers are lost (T8), so the outcome depends on timing. This points to a dependency or renaming problem for the reduction micro-ops when `vd` aliases `vs2[0]`, not an arithmetic error.
 - In kernels this showed up as validation failures in `rvv_opt_m2`, `rvv_opt_m4` and `dense_m2`. `dense_m4` passed by chance.
 
+**O3-specific:** the same binary on gem5's in-order **MinorCPU** gives output identical to QEMU for all of T1–T12 (`results/endterm/phase2/gem5_rvv_check_minor/`).
+
 **Workaround used** (`src/kernels/rvv_reduce.h`): fold the LMUL>1 accumulator to one register with LMUL=1 `vfadd.vv` (`vget` is free), then reduce at LMUL=1. This is the T12 pattern, and it is also the usual faster reduction sequence. After the workaround, every m1/m2 kernel and every dense kernel validates at every density tested.
 
 ## Issue 2: LMUL=4 indexed gather (`vluxei32.v`) gives intermittently wrong results on O3
@@ -81,12 +83,31 @@ So the failure probability rises with the number of in-flight indexed-load eleme
 
 **Handling:** `rvv_opt_m4` is not run. `rvv_opt_m2` and `rvv_acc2_m2` are still run, and the runs that validate are reported, but **no claim uses LMUL≥2 gather kernels**. If the bug can corrupt values, it may also perturb timing. Claims rely on scalar, LMUL=1-gather (`rvv_orig`, `rvv_opt_m1`, `rvv_acc2_m1`), dense (unit-stride) and SpMM kernels, which have never failed validation. If the O3 model doesn't enforce the dependency, the timing of the runs that pass may also be optimistic. A fix would be a gem5 C++ change (rebuild required), and that needs approval first (see PROGRESS.md).
 
+## Issue 3: register-merging compaction (`vslideup`/`vslidedown`, tail-undisturbed) faults on O3
+
+**Reproducer:** `gemv_compress_slide_m1` in `src/kernels/gemv_mask.c` (kernel name `dense_compress_slide_m1`).
+- It packs the nonzeros of a dense row into a vector-register buffer: `vcompress`, then tail-undisturbed `vslideup.vx` at the fill position, with `vslidedown.vx` for leftovers.
+- When the buffer is full it reads it at full width: `vsll` → `vluxei32` gather → `vfmacc`.
+
+| Platform | Result |
+|---|---|
+| QEMU 8.2.2, default tail/mask policy | PASSED (1/20/60% density, n=1024) |
+| QEMU with `rvv_ta_all_1s=true,rvv_ma_all_1s=true` (agnostic elements = all ones) | PASSED, so the code does not depend on unspecified tail values |
+| gem5 MinorCPU | PASSED |
+| **gem5 O3** | **panic: page-table fault** on a gathered address (e.g. `0x1000b7b7c`) during commit; gem5 exit 134 |
+
+Evidence: `results/endterm/phase4a_gem5_compress_investigation/` (n=256 d=5% on Minor and O3 for both versions, plus the first failing 1024×1024 run).
+
+The gathered offsets come from the merged index buffer, so on O3 that buffer's register contents are stale. This is consistent with Issue 1 (reads after tail-undisturbed partial writes see stale register data), here at LMUL=1 with slide instructions.
+
+**Workaround used:** `gemv_compress_m1` stages the compacted values and indices in a small memory buffer (`vse32` at the fill position, `vle32` of a full vector when ready), with no register merging. It validates on O3, Minor and QEMU.
+
 ## Other gem5 observations (not bugs)
 
 - **L1D "miss rate" counts MSHR hits.** A demand access that merges into an in-flight miss is counted in `demandMisses`. At LMUL=4 the two register micro-ops that touch the same 64-byte line issue back to back, so `dense_m4` reports a 49% "miss rate" but only 2.1–4.8% primary misses (depending on density). L2 accesses are identical across m1/m2/m4. Reports use `demandMshrMisses` (primary misses) alongside the raw rate.
 - **LMUL>1 arithmetic is split per register.** The committed micro-op count of a vector arithmetic instruction is the number of registers holding active elements, Σ ceil(len / VLMAX_m1), not the number of instructions. The harness prints this as `reg_chunks`, and the reports check it against `committedInstType`.
 
-## Observation: unit-stride loads of exactly 128 bytes are slow in the dense GEMV (timing only)
+## Observation: unit-stride loads of exactly 128 bytes are slow in the dense GEMV (timing only; prefetcher training)
 
 In Phase 3 (1024 × 1024, matrix streamed from DRAM), the dense GEMV takes about 2.2M ROI cycles whenever one vector load covers exactly 128 bytes (two cache lines), and 0.5–0.77M cycles otherwise:
 
@@ -98,4 +119,15 @@ In Phase 3 (1024 × 1024, matrix streamed from DRAM), the dense GEMV takes about
 | **dense_m2** | **512** | **128** | **2,257,635** |
 | dense_m4 | 512 | 256 | 507,298 |
 
-All of these runs validate, so this is a timing effect, not wrong results. Its cause is not yet known; one candidate is how the stride prefetcher trains on the paired line accesses. It will be examined with the prefetcher work in Phase 4B. It does not affect the dense-vs-sparse crossover, which uses the fastest dense variant (`dense_m2` at VLEN=256).
+All of these runs validate, so this is a timing effect, not wrong results. It does not affect the dense-vs-sparse crossover, which uses the fastest dense variant (`dense_m2` at VLEN=256).
+
+**Cause isolated (Phase 4B prep, `results/endterm/phase4b_prep/`, `--l1d-pf/--l2-pf` options of `configs/sparse_rvv.py`):** it is a stride-prefetcher training failure.
+
+| dense_m4, d=5%, VLEN=256 | ROI cycles | L1D primary miss | L1D prefetches identified | L1D pf coverage |
+|---|---:|---:|---:|---:|
+| stride L1D + stride L2 (default) | 2,253,972 | 24.9% | 947 | 0.04% |
+| no prefetchers | 2,259,039 | 24.9% | – | – |
+| stride L1D only (L2 prefetcher off) | 838,938 | 0.4% | 252,138 | 0 (all late/MSHR hits) |
+| dense_m2 (64-byte loads), default | 589,118 | 0.4% | 252,146 | 82.3% |
+
+With 128-byte (two-line) vector loads *and* an active L2 prefetcher, the L1D stride prefetcher almost never detects the stream, so the kernel runs as if it had no L1D prefetcher. The exact mechanism inside the stride table was not traced further.

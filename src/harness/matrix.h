@@ -37,6 +37,14 @@ void gen_random(csr_t *A, uint32_t rows, uint32_t cols, double density,
                 dist_t dist, double alpha, uint64_t seed);
 
 /*
+ * Mixed-density matrix for the hybrid kernel: rows are grouped in bands of
+ * `band` rows; each band is "dense" with probability `frac` (fixed-seed PRNG)
+ * and then filled uniformly with density d_hi, otherwise with density d_lo.
+ */
+void gen_mixed(csr_t *A, uint32_t rows, uint32_t cols, double d_lo, double d_hi,
+               double frac, uint32_t band, uint64_t seed);
+
+/*
  * Binary CSR file written by scripts/mtx2bin.py from a Matrix Market file:
  *   char magic[4] = "CSRB"; uint32 version = 1, rows, cols, nnz;
  *   uint32 row_ptr[rows+1]; uint32 col_idx[nnz]; float values[nnz]

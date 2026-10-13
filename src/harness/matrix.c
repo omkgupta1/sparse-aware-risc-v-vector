@@ -141,6 +141,28 @@ void gen_random(csr_t *A, uint32_t rows, uint32_t cols, double density,
     free(len);
 }
 
+void gen_mixed(csr_t *A, uint32_t rows, uint32_t cols, double d_lo, double d_hi,
+               double frac, uint32_t band, uint64_t seed)
+{
+    rng_t r = {seed};
+    uint64_t cap = (uint64_t)((frac * d_hi + (1.0 - frac) * d_lo) * rows * cols * 1.2) + 1024;
+
+    A->rows = rows;
+    A->cols = cols;
+    A->nnz = 0;
+    A->row_ptr = xalloc((uint64_t)(rows + 1) * sizeof(uint32_t));
+    A->col_idx = xalloc(cap * sizeof(uint32_t));
+    A->values = xalloc(cap * sizeof(float));
+
+    double p = d_lo;
+    for (uint32_t i = 0; i < rows; i++) {
+        if (i % band == 0)
+            p = rng_unit(&r) <= frac ? d_hi : d_lo;
+        fill_row(A, &cap, cols, p, &r);
+        A->row_ptr[i + 1] = A->nnz;
+    }
+}
+
 static void read_exact(FILE *f, void *dst, size_t bytes, const char *path)
 {
     if (fread(dst, 1, bytes, f) != bytes) {

@@ -1,0 +1,31 @@
+Global frequency set at 1000000000000 ticks per second
+src/arch/riscv/isa.cc:321: info: RVV enabled, VLEN = 256 bits, ELEN = 64 bits
+src/base/statistics.hh:279: warn: One of the stats is a legacy stat. Legacy stat is a stat that does not belong to any statistics::Group. Legacy stat is deprecated.
+src/base/stats/storage.hh:278: warn: Bucket size (4) does not divide range [1:32] into equal-sized buckets. Rounding up.
+src/base/stats/storage.hh:278: warn: Bucket size (4) does not divide range [1:8] into equal-sized buckets. Rounding up.
+src/base/remote_gdb.cc:418: warn: Sockets disabled, not accepting gdb connections
+gem5 Simulator System.  https://www.gem5.org
+gem5 is copyrighted software; use the --copyright option for details.
+
+gem5 version 25.1.0.1
+gem5 compiled Aug 29 2026 12:59:38
+gem5 started Oct 13 2026 18:41:12
+gem5 executing on eaa5ab3cedbe, pid 1365
+command line: /workspace/gem5/build/RISCV/gem5.opt -d results/endterm/phase4a/mixed/mx_n1024_lo01_hi80_f025/hybrid_t75 configs/sparse_rvv.py --binary build/bench --program-args kernel=hybrid thr=75 block_rows=64 gen=mixed n=1024 d_lo=1 d_hi=80 frac=0.25 band=64 seed=1
+
+info: Standard input is not a terminal, disabling listeners.
+sparse_rvv: cpu=o3 VLEN=256 ELEN=64 LQ=default SQ=default L1D=32KiB L2=512KiB
+Binary: /project/build/bench args: kernel=hybrid thr=75 block_rows=64 gen=mixed n=1024 d_lo=1 d_hi=80 frac=0.25 band=64 seed=1
+src/sim/syscall_emul.cc:97: warn: ignoring syscall set_robust_list(...)
+      (further warnings will be suppressed)
+src/sim/syscall_emul.hh:1127: warn: readlink() called on '/proc/self/exe' may yield unexpected results in various settings.
+      Returning '/project/build/bench'
+src/sim/mem_state.cc:443: info: Increasing stack size by one page.
+src/sim/syscall_emul.cc:86: warn: ignoring syscall mprotect(...)
+CONFIG kernel=hybrid gen=mixed rows=1024 cols=1024 density_pct=20 nnz_per_row=0 alpha=1.8 seed=1 path=- k=1 warmup=1 cold=0 tol=0.0001 d_lo=1 d_hi=80 frac=0.25 band=64 block_rows=64 thr=75
+MATRIX rows=1024 cols=1024 nnz=270043 density_actual=0.257533 row_len_min=2 row_len_max=853 row_len_mean=263.7139 row_len_cv=1.4259 empty_rows=0 csr_bytes=2164444 x_bytes=4096
+HYBRID block_rows=64 thr_pct=75 blocks=16 dense_blocks=5 dense_rows=320 dense_nnz=262831
+WORK scanned_chunks=21690 skipped_chunks=0 arith_chunks=21690 arith_lanes=334892 useful_lanes=270043 zero_lanes=64849 useful_frac=0.806358
+RESULT kernel=hybrid nnz=270043 checksum=77675.393510401 max_rel_err=1.617819e-07 bad_rows=0 validation=PASSED
+HOST_SECONDS=135
+EXIT_STATUS=0
