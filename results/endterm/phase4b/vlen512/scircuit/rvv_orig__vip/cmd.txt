@@ -1,0 +1,1 @@
+/workspace/gem5/build/RISCV/gem5.opt -d results/endterm/phase4b/vlen512/scircuit/rvv_orig__vip configs/sparse_rvv.py --binary build/bench --vlen 512 --l1d-pf VectorIndirectPrefetcher --program-args kernel=rvv_orig gen=file path=/project/matrices/scircuit.csr 

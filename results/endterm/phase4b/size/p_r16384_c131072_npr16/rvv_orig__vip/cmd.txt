@@ -1,0 +1,1 @@
+/workspace/gem5/build/RISCV/gem5.opt -d results/endterm/phase4b/size/p_r16384_c131072_npr16/rvv_orig__vip configs/sparse_rvv.py --binary build/bench --l1d-pf VectorIndirectPrefetcher --program-args kernel=rvv_orig gen=powerlaw rows=16384 cols=131072 nnz_per_row=16 alpha=1.8 seed=1 

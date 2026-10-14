@@ -1,0 +1,4 @@
+vector version is not specified, use the default value v1.0
+bad rows: 0 of 256
+PASS
+exit=0

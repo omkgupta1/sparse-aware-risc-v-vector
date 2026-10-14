@@ -1,0 +1,6 @@
+vector version is not specified, use the default value v1.0
+A (vd overlaps vs2) = 63.5
+B (vd = v10)        = 63.5
+expected            = 63.5
+PASS
+exit=0

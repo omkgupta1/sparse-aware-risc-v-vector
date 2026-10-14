@@ -1,0 +1,31 @@
+Global frequency set at 1000000000000 ticks per second
+src/arch/riscv/isa.cc:321: info: RVV enabled, VLEN = 256 bits, ELEN = 64 bits
+src/base/statistics.hh:279: warn: One of the stats is a legacy stat. Legacy stat is a stat that does not belong to any statistics::Group. Legacy stat is deprecated.
+src/base/stats/storage.hh:278: warn: Bucket size (4) does not divide range [1:32] into equal-sized buckets. Rounding up.
+src/base/stats/storage.hh:278: warn: Bucket size (4) does not divide range [1:8] into equal-sized buckets. Rounding up.
+src/base/remote_gdb.cc:418: warn: Sockets disabled, not accepting gdb connections
+gem5 Simulator System.  https://www.gem5.org
+gem5 is copyrighted software; use the --copyright option for details.
+
+gem5 version 25.1.0.1
+gem5 compiled Oct 13 2026 19:55:19
+gem5 started Oct 13 2026 20:23:42
+gem5 executing on 6acdf5e20c78, pid 1338
+command line: /workspace/gem5/build/RISCV/gem5.opt -d results/endterm/phase4b/suitesparse/scircuit/rvv_acc2_m1__stride configs/sparse_rvv.py --binary build/bench --program-args kernel=rvv_acc2_m1 gen=file path=/project/matrices/scircuit.csr
+
+info: Standard input is not a terminal, disabling listeners.
+sparse_rvv: cpu=o3 VLEN=256 ELEN=64 LQ=default SQ=default L1D=32KiB L2=512KiB l1d_pf=stride l2_pf=stride l1d_pf_params=-
+Binary: /project/build/bench args: kernel=rvv_acc2_m1 gen=file path=/project/matrices/scircuit.csr
+src/sim/syscall_emul.cc:97: warn: ignoring syscall set_robust_list(...)
+      (further warnings will be suppressed)
+src/sim/syscall_emul.hh:1127: warn: readlink() called on '/proc/self/exe' may yield unexpected results in various settings.
+      Returning '/project/build/bench'
+src/sim/mem_state.cc:443: info: Increasing stack size by one page.
+src/sim/syscall_emul.cc:86: warn: ignoring syscall mprotect(...)
+CONFIG kernel=rvv_acc2_m1 gen=file rows=170998 cols=170998 density_pct=20 nnz_per_row=0 alpha=1.8 seed=1 path=/project/matrices/scircuit.csr k=1 warmup=1 cold=0 tol=0.0001 d_lo=5 d_hi=80 frac=0.25 band=64 block_rows=64 thr=58.2
+MATRIX rows=170998 cols=170998 nnz=958936 density_actual=3.2795e-05 row_len_min=1 row_len_max=353 row_len_mean=5.6079 row_len_cv=0.7832 empty_rows=0 csr_bytes=8355484 x_bytes=683992
+VECTOR lmul=1 vlmax=8 chunks=192505 reg_chunks=192505 active_elems=958936 useful_elems=958936 lane_util=0.622670
+WORK scanned_chunks=192505 skipped_chunks=0 arith_chunks=192505 arith_lanes=958936 useful_lanes=958936 zero_lanes=0 useful_frac=1.000000
+RESULT kernel=rvv_acc2_m1 nnz=958936 checksum=392.963293304 max_rel_err=1.927503e-07 bad_rows=0 validation=PASSED
+HOST_SECONDS=228
+EXIT_STATUS=0

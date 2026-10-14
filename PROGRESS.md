@@ -10,9 +10,9 @@ script-generated file under `results/endterm/`; the source file is named next to
 | 2. Proper baselines | ✅ Done (rvv_opt_m4 excluded: gem5 O3 bug) |
 | 3. Realistic workloads and sweeps | ✅ Done (316 runs; LMUL=2 gather kernels unreliable on gem5 O3) |
 | 4A. Software sparse-aware mechanism | ✅ Done (128/128 validated) |
-| 4B. Hardware mechanism (indirect gather prefetcher, chosen 2026-10-13) | ⏳ Feasibility study done; waiting for approval of the gem5 C++ change |
+| 4B. Hardware mechanism: Vector-Indirect Prefetcher (gem5 C++) | ✅ Implemented and evaluated (184/184 runs validated); storage estimated. Follow-up history-depth / MSHR studies scripted but not run (host on battery) |
 | 5. Metrics, analysis, plots | ⏳ Not started |
-| 6. Reproducibility and documentation | ⏳ Partly started (Makefile, Docker env, gem5 issue write-up) |
+| 6. Reproducibility and documentation | ⏳ Partly started (Makefile, Docker env, gem5 issue write-up, gem5 bug-report drafts, PROJECT_SUMMARY.md) |
 
 ---
 
@@ -211,3 +211,114 @@ ROI cycles (speedup vs. scalar):
 **Phase 4B preparation (no gem5 source changes)**
 - `configs/sparse_rvv.py` gains `--l1d-pf/--l2-pf {stride (default), none, <prefetcher class>}`. The default reproduces an earlier run exactly: `rvv_orig` d=5% gives 66,135 cycles in both cases.
 - **The 128-byte dense-load anomaly is explained:** with 128-byte vector loads and the L2 stride prefetcher active, the L1D stride prefetcher fails to train (947 vs. about 252K prefetches identified). With the L2 prefetcher off, `dense_m4` takes 838,938 cycles instead of 2,253,972. Details are in `docs/gem5_rvv_issues.md`.
+
+## Phase 4B: Hardware mechanism, the Vector-Indirect Prefetcher (2026-10-14)
+
+**Approval:** full design approved; build **in place** in `~/gem5-assignment/gem5`. The original binary is kept as `build/RISCV/gem5.opt.pre-sparse-backup`. Pristine copies of the modified gem5 files are in `gem5_patches/pristine/`.
+
+**Done**
+- **Feasibility study** (`docs/phase4b_design.md` §1–5). gem5's `IndirectMemoryPrefetcher` cannot train on RVV: it reads indices only from loads of ≤ 8 bytes, and it **panics on read hits** (gem5 Issue 4). Upper bound from Phase 3: gather misses cost up to 72.9% of kernel time.
+- **`VectorIndirectPrefetcher`** (`src/mem/cache/prefetch/vector_indirect.{hh,cc}`, 534 lines; `Prefetcher.py`, `SConscript`), a subclass of `StridePrefetcher`:
+  - vector index-stream table, keyed by PC;
+  - pattern learning `addr = base + (idx << shift)` against a 32-deep history of index vectors (out-of-order tolerant), by intersecting candidates over ≥ 3 gather samples;
+  - immediate target prefetches;
+  - **look-ahead** from index-line fills (targets queued and issued with the next demand access so they can be translated);
+  - virtual addresses with the MMU (page crossing);
+  - 12 `statistics::Scalar` counters (`*.prefetcher.vip.*`);
+  - parameters `enable_indirect`, `enable_lookahead`, `lookahead_window`, `vist_entries`, `max_targets_per_trigger`, `index_shifts`.
+- **Four implementation problems, found by measurement and fixed** (`docs/phase4b_design.md` §6):
+  1. hit packets carry no `hasData()`;
+  2. out-of-order lag between index loads and gathers;
+  3. patterns dropped too eagerly;
+  4. prefetch-fill packets have no virtual address or context.
+- **Regression:** the patched and original gem5 give identical cycles (1,388,982) on the same workload.
+- **Patch:** `gem5_patches/sparse_aware.patch` (`scripts/make_gem5_patch.sh`, plain `diff -ruN`). `scripts/apply_gem5_patch.sh` was verified to reproduce all 4 files byte for byte on pristine copies.
+- **Config:** `configs/sparse_rvv.py` gains `--l1d-pf VectorIndirectPrefetcher` (MMU wired automatically) and `--l1d-pf-param KEY=VALUE`. `scripts/collect.py` collects all L1D/L2 prefetcher stats (`pf_l1d_*`, `pf_l2_*`).
+- **Evaluation:** `scripts/run_phase4b.sh` + `scripts/phase4b_report.py` → `results/endterm/phase4b/phase4b_{all.csv,summary.md}`. **137/137 completed runs validated.**
+
+**Results** (`rvv_orig` unless stated; speedup vs. the L1D stride prefetcher; the "indirect-only" column = VIP vs. VIP with `enable_indirect=False`, which isolates the new mechanism from the virtual-address stride mode):
+
+| Input | stride → VIP cycles | Total | Indirect-only |
+|---|---:|---:|---:|
+| uniform, `x` = 512 KiB (L2-resident) | 1,389,015 → 990,512 | **1.40×** | **1.39×** |
+| uniform, `x` = 2 MiB (DRAM) | 2,084,368 → 1,947,754 | 1.07× | 1.06× |
+| power-law, `x` = 2 MiB | 2,088,357 → 1,930,770 | 1.08× | 1.08× |
+| web-NotreDame (web graph) | 5,061,777 → 4,532,898 | 1.12× | 1.08× |
+| scircuit (circuit) | 4,554,701 → 4,143,256 | 1.10× | 1.08× |
+| scircuit, **VLEN=512** | 4,352,115 → 3,222,778 | **1.35×** | – |
+| bcsstk17 (FEM, gathers hit) | 640,787 → 598,375 | 1.07× | 1.00× |
+| uniform, `x` = 8 / 32 KiB (gathers hit) | – | 1.05× / 1.06× | 1.00× / 1.01× |
+| uniform, `x` = 128 KiB | 904,211 → 923,408 | 0.98× | 0.98× |
+| luxembourg_osm (road, 2.1 nnz/row) | 1,959,394 → 2,050,062 | 0.96× | 0.94× |
+
+- **Other kernels:**
+  - `rvv_acc2_m1` (two accumulators): **1.86×** at 512 KiB `x` and **1.75×** at 2 MiB (L1D primary miss 63.3% → 22.1%).
+  - `rvv_opt_m1`: 1.31× on web-NotreDame, but about 1.00× on the synthetic sweep, where its pattern is **never learned** (0 targets).
+  - Scalar CSR: 1.00–1.03× (no harm).
+- **Mechanism (512 KiB `x`):** L1D primary miss 55.0% → 6.8%; L1D prefetch accuracy 24% → 63%, coverage 12% → 86%; LQ-full events 628,548 → 335,264; about 237K look-ahead targets in the ROI.
+- **Ablation:**
+  - without look-ahead the indirect part gives ≤ 1.06×, so **look-ahead provides almost all of the gain**;
+  - with no L1D prefetcher at all: 0.81–0.99×.
+- **Look-ahead window:** 256 B / 1 KiB / 4 KiB give 1.37× / 1.40× / 1.40× (512 KiB `x`) and 1.07× for all three at 2 MiB.
+
+**Interpretation and open questions**
+1. **Biggest win when gathers miss L1D but hit L2.** At 2 MiB (L2 miss rate 71%) coverage drops to 27%. Hypothesis: the L1D's 16 MSHRs and DRAM latency limit how many target prefetches can be outstanding. To test: `--l1d-mshrs` sweep (option prepared, not yet run).
+2. **`rvv_opt_m1` never learns on long uniform rows.** Hypothesis: its loop-carried `vfmacc` chain lets index loads run more than 32 index vectors ahead of their gathers, outside the history window. To test: history-depth sweep (`history_depth` parameter added to the source; rebuild pending until the running batch ends).
+3. **Small losses (0.94–0.98×) where gathers already hit** (luxembourg_osm, 128 KiB `x`): useless prefetches raise L2 misses (luxembourg 26.5% → 36.5%). An accuracy-based throttle is future work.
+4. Hardware storage estimate not done yet. It depends on 2: the history is the dominant storage.
+
+**Bug found in my own scripts:** `scripts/run_phase4b.sh` reused the loop variable `c` inside a helper, so all power-law size-sweep jobs ran with `cols=<config name>` and failed immediately (11 runs). Fixed (`local` variables); the bogus results were deleted and the power-law inputs are being re-run. The first batch's log is kept as `results/endterm/phase4b/run_phase4b_batch1.log`.
+
+**gem5 bug reports:** `docs/gem5_bug_reports/` has 4 issue drafts with standalone reproducers (`repro/`). **All 4 were reproduced on the unmodified gem5 25.1.0.1 binary** (O3 wrong/crash; MinorCPU and QEMU correct; Issue 4 also crashes on MinorCPU). Evidence: `results/endterm/gem5_bug_reports/*.log`. Not filed.
+
+### Phase 4B final update (2026-10-14)
+
+**Evaluation complete: 184/184 runs validated** (`results/endterm/phase4b/phase4b_summary.md`, `phase4b_all.csv`). The power-law size sweep was re-run after the script fix.
+
+| Input | `rvv_orig` total / indirect-only | `rvv_opt_m1` | `rvv_acc2_m1` | scalar |
+|---|---:|---:|---:|---:|
+| uniform, `x` = 512 KiB | 1.40× / 1.39× | 1.01× | 1.86× | 1.01× |
+| power-law, `x` = 512 KiB | 1.43× / 1.42× | **3.02×** | 1.61× | 1.01× |
+| uniform / power-law, `x` = 2 MiB | 1.07× / 1.06×; 1.08× / 1.08× | 1.00× | 1.75×; 1.60× | 1.00× |
+| uniform / power-law, `x` = 128 KiB | 0.98× / 0.98×; 0.98× / 0.97× | 1.02×; 1.43× | 1.16×; **0.82×** | 1.02–1.03× |
+| web-NotreDame / scircuit / bcsstk17 / luxembourg_osm | 1.12× / 1.10× / 1.07× / 0.96× | 1.31× / 1.02× / 1.07× / 1.01× | 1.00× / 1.10× / 1.02× / 1.01× | 1.01–1.02× |
+
+**Hardware storage estimate** (`scripts/vip_storage.py`, `docs/phase4b_design.md` §8):
+- At the evaluated history depth 32: **≈ 38 KiB** as simulated (per-stream history, larger than the L1D) or **≈ 10 KiB** with 2 shared history buffers.
+- At depth 8: 10.3 KiB / 3.3 KiB. At depth 4: 5.7 KiB / 2.1 KiB.
+- The streaming part (VIST scalar fields + dedup filter + pending queue) is about 1.0 KiB.
+- **Whether a small history keeps the speedups is not yet measured**, so only the depth-32 numbers are claimable.
+
+**gem5 rebuilt** with a `history_depth` parameter (default 32), and `configs/sparse_rvv.py` gained `--l1d-mshrs`. Patch regenerated and round-trip verified (`vector_indirect.{hh,cc}` now 534 lines).
+- **Regression:** with byte-identical program arguments, the rebuilt gem5 and new config reproduce the main batch exactly (1,389,015 stride / 990,512 VIP cycles).
+- **Finding:** program arguments alone shift timing slightly. A run without the (unused) `alpha=1.8` argument gave −0.002% / +0.12%. Comparisons must always use identical argument strings.
+
+**Not done (reason: host)** — `scripts/run_phase4b_extra.sh` (70 runs: history depth 4–128 × 3 kernels × 3 inputs; L1D MSHRs 32/64, stride vs. VIP):
+- The Mac was on battery and repeatedly suspended: two normally 2-minute regression runs took 87 min and 56 min.
+- The report sections for these studies are already written.
+- To run on mains power: `scripts/env.sh scripts/run_phase4b_extra.sh` (about 30 min), then `python3 scripts/phase4b_report.py`.
+
+**Open questions** (unchanged until that batch runs):
+1. Is the 2 MiB case MSHR-limited?
+2. Why does `rvv_opt_m1` miss the pattern on uniform rows (history window?)
+3. Accuracy throttling for the cases where VIP loses up to 18% (power-law 128 KiB `rvv_acc2_m1`).
+
+#### Review summary (Phase 4B, all uncommitted)
+
+| Change | File(s) | What |
+|---|---|---|
+| Added | `gem5_patches/sparse_aware.patch` | The gem5 change (4 files; plain `diff -ruN`) |
+| Added | `gem5_patches/pristine/src/mem/cache/prefetch/{Prefetcher.py,SConscript}` | Unmodified gem5 25.1.0.1 copies used to regenerate the patch |
+| Added | `scripts/make_gem5_patch.sh`, `scripts/apply_gem5_patch.sh` | Regenerate / apply (with dry run) the patch |
+| Added | `scripts/run_phase4b.sh`, `scripts/run_phase4b_extra.sh`, `scripts/phase4b_report.py`, `scripts/vip_storage.py` | Phase 4B batch, follow-up batch, report, storage estimate |
+| Modified | `configs/sparse_rvv.py` | `--l1d-pf`, `--l2-pf`, `--l1d-pf-param KEY=VALUE` (MMU wired for VIP), `--l1d-mshrs`; defaults unchanged (verified) |
+| Modified | `scripts/collect.py` | Records prefetcher config and all L1D/L2 prefetcher stats (`pf_l1d_*`, `pf_l2_*`) |
+| Added | `docs/phase4b_design.md` | Design, feasibility, implementation changes, results, storage estimate, status |
+| Modified | `docs/gem5_rvv_issues.md` | Issue 4 (IMP panic); 128-byte stride-prefetcher observation explained |
+| Added | `docs/gem5_bug_reports/` (README, 4 issue drafts, `repro/` sources, config, runner) | Ready-to-file gem5 bug reports; duplicate check done |
+| Added | `results/endterm/phase4b/**` | 184 runs (`stats.txt.gz`, `config.ini.gz`, `run.log`, `cmd.txt`), `phase4b_{all.csv,summary.md}`, batch logs |
+| Added | `results/endterm/phase4b_prep/**` | Smoke tests, regression checks, IMP-panic evidence, 128-byte anomaly runs |
+| Added | `results/endterm/gem5_bug_reports/*.log` | Bug-reproducer evidence on unmodified gem5 (binaries and raw outputs git-ignored) |
+| Modified | `.gitignore` | Ignores reproducer binaries and raw gem5 output |
+| Modified | `PROGRESS.md`, `PROJECT_SUMMARY.md` | Phase 4B results |
+| **Outside the repo** | `~/gem5-assignment/gem5/src/mem/cache/prefetch/{vector_indirect.hh,vector_indirect.cc,Prefetcher.py,SConscript}`; `build/RISCV/gem5.opt` rebuilt; original kept as `build/RISCV/gem5.opt.pre-sparse-backup` | The in-place gem5 change you approved. Restore the original binary with `cp gem5.opt.pre-sparse-backup gem5.opt`. |

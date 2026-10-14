@@ -1,0 +1,1 @@
+/workspace/gem5/build/RISCV/gem5.opt -d results/endterm/phase4b/suitesparse/bcsstk17/rvv_orig__vip_nola configs/sparse_rvv.py --binary build/bench --l1d-pf VectorIndirectPrefetcher --l1d-pf-param enable_lookahead=False --program-args kernel=rvv_orig gen=file path=/project/matrices/bcsstk17.csr 

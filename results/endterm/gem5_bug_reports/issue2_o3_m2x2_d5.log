@@ -1,0 +1,30 @@
+Global frequency set at 1000000000000 ticks per second
+src/arch/riscv/isa.cc:321: info: RVV enabled, VLEN = 256 bits, ELEN = 64 bits
+src/base/statistics.hh:279: warn: One of the stats is a legacy stat. Legacy stat is a stat that does not belong to any statistics::Group. Legacy stat is deprecated.
+src/base/stats/storage.hh:278: warn: Bucket size (4) does not divide range [1:32] into equal-sized buckets. Rounding up.
+src/base/stats/storage.hh:278: warn: Bucket size (4) does not divide range [1:8] into equal-sized buckets. Rounding up.
+src/base/remote_gdb.cc:418: warn: Sockets disabled, not accepting gdb connections
+gem5 Simulator System.  https://www.gem5.org
+gem5 is copyrighted software; use the --copyright option for details.
+
+gem5 version 25.1.0.1
+gem5 compiled Aug 29 2026 12:59:38
+gem5 started Oct 13 2026 20:32:12
+gem5 executing on 1ee6f7df9190, pid 46
+command line: /workspace/gem5/build/RISCV/gem5.opt.pre-sparse-backup -d /project/results/endterm/gem5_bug_reports/issue2_o3_m2x2_d5 /project/docs/gem5_bug_reports/repro/se_riscv_rvv.py --binary /project/results/endterm/gem5_bug_reports/issue2 --cpu o3 --args m2x2 5
+
+info: Standard input is not a terminal, disabling listeners.
+src/sim/syscall_emul.cc:97: warn: ignoring syscall set_robust_list(...)
+      (further warnings will be suppressed)
+src/sim/syscall_emul.hh:1127: warn: readlink() called on '/proc/self/exe' may yield unexpected results in various settings.
+      Returning '/project/results/endterm/gem5_bug_reports/issue2'
+src/sim/mem_state.cc:443: info: Increasing stack size by one page.
+src/sim/syscall_emul.cc:86: warn: ignoring syscall mprotect(...)
+row 1 (len 42): got 9.786098 expected 10.23529
+row 3 (len 53): got 14.63102 expected 14.74332
+row 4 (len 45): got 11.4385 expected 12.07487
+row 5 (len 69): got 20.39038 expected 20.8877
+row 8 (len 49): got 14.55615 expected 14.63636
+mode m2x2 density 5% nnz 52208, bad rows: 225 of 1024
+FAIL
+exit=0

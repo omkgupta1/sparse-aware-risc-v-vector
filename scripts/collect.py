@@ -48,6 +48,10 @@ def parse_run_log(path):
     m = re.search(r"^sparse_rvv: cpu=(\S+) VLEN=(\d+) ELEN=(\d+)", text, re.M)
     if m:  # printed by configs/sparse_rvv.py
         rec["sim_cpu"], rec["sim_vlen"], rec["sim_elen"] = m.group(1), int(m.group(2)), int(m.group(3))
+    for key in ("l1d_pf", "l2_pf", "l1d_pf_params"):
+        m = re.search(rf"^sparse_rvv: .* {key}=(\S+)", text, re.M)
+        if m:
+            rec[f"sim_{key}"] = m.group(1)
     m = re.search(r"^HOST_SECONDS=(\d+)$", text, re.M)
     rec["host_seconds"] = int(m.group(1)) if m else None
     m = re.search(r"^EXIT_STATUS=(\d+)$", text, re.M)
@@ -68,6 +72,13 @@ def collect(run_dir):
     prefix = f"{CORE}.commitStats0.committedInstType::"
     for c in OP_CLASSES:
         rec[f"op_{c}"] = roi.get(prefix + c, 0)
+    # Every scalar statistic of the L1D / L2 prefetchers in the ROI
+    # (pfIssued, pfUseful, accuracy, coverage, ..., and the VIP's vip.* group).
+    for cache, tag in (("l1d-cache-0", "pf_l1d_"), ("l2-cache-0", "pf_l2_")):
+        pre = f"board.cache_hierarchy.{cache}.prefetcher."
+        for k, v in roi.items():
+            if k.startswith(pre) and "::" not in k and not isinstance(v, str):
+                rec[tag + k[len(pre):].replace(".", "_")] = v
     return rec
 
 

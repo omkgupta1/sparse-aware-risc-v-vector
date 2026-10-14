@@ -1,0 +1,4 @@
+vector version is not specified, use the default value v1.0
+mode m2x2 density 5% nnz 52208, bad rows: 0 of 1024
+PASS
+exit=0

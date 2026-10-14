@@ -1,6 +1,10 @@
 # Phase 4B: Vector-Indirect Prefetcher (VIP), Design and Feasibility
 
-Status: **proposal, waiting for approval.** No gem5 source has been changed.
+Status: **implemented** (approved 2026-10-14, built in place in `~/gem5-assignment/gem5`; the original `gem5.opt` is kept as `build/RISCV/gem5.opt.pre-sparse-backup`).
+- **Patch:** `gem5_patches/sparse_aware.patch`, 4 files, generated with `scripts/make_gem5_patch.sh` (plain `diff -ruN`), applied with `scripts/apply_gem5_patch.sh`.
+- **Default behaviour unchanged:** the patched and original binaries give identical ROI cycles (1,388,982) on the same workload (`results/endterm/phase4b_prep/regress_*`).
+
+Sections 1–5 are the design as proposed; section 6 lists what changed during implementation and why.
 
 ## 1. Why a new prefetcher
 
@@ -62,3 +66,104 @@ Parameters: `vist_entries=16`, `max_targets_per_trigger=16`, `index_shifts=[2,3]
 | L1D pollution (32 KiB) from target prefetches | Per-trigger cap, line deduplication, measured accuracy; L2 placement as a fallback variant |
 | Changed timing exposes the known O3 RVV bugs | Only LMUL=1 gather kernels; every run validated |
 | Index loads that miss carry no data | The look-ahead path reads indices from the fill packet instead |
+
+## 6. Changes made during implementation (all driven by measurements)
+
+| # | Proposed | Implemented | Why (evidence in `results/endterm/phase4b_prep/`) |
+|---|---|---|---|
+| 1 | Index values from `PrefetchInfo::get` on hits | `notify()` override keeps the packet; a *satisfied read hit* is treated as having data | gem5 notifies hits before the packet becomes a response, so `hasData()` is false and `PrefetchInfo` holds no data (gem5 Issue 4; the stock IMP panics on this). First smoke run: 6,782 index accesses, 0 with data. |
+| 2 | Pair each index access with the *first* following gather access | Each stream keeps the indices of its last **32** index accesses. Every gather access gives candidate `(base, shift)` pairs against the whole history; intersecting ≥ 3 samples from the same gather PC enables the pattern. | O3 runs later chunks' index loads ahead of earlier gathers (the LQ is full), so "the next gather" usually belongs to another chunk. With pairing, no pattern was ever learned. |
+| 3 | Confidence counter disables a pattern on mismatches | Sampled checks (every 8th gather access); disable only after **64 consecutive** failed checks | With an 8-entry history and a confidence counter the correct pattern was dropped within the ROI (7 failed checks, 31 immediate targets). Gathers can lag their index loads by more than the history window. |
+| 4 | Look-ahead targets inserted directly from `notifyFill` | Look-ahead targets go into a pending queue (64) and are issued with the next demand access | Fills caused by (same-page) stride prefetches carry no virtual address or context ID, so page-crossing targets cannot be translated from the fill packet. Filled lines are mapped to virtual addresses through the stream's last (VA, PA) pair. |
+
+Smoke test after these changes (4,096 rows × 16 nnz/row, `x` = 512 KiB, `rvv_orig`):
+
+| L1D prefetcher | ROI cycles | Speedup vs. stride | L1D primary miss |
+|---|---:|---:|---:|
+| stride | 348,903 | 1.00× | 55.0% |
+| VIP, indirect off | 346,559 | 1.01× | 54.9% |
+| VIP, no look-ahead | 342,504 | 1.02× | 46.0% |
+| VIP | 248,680 | 1.40× | 6.7% |
+
+Immediate prefetches alone come too late: the gather follows its index load within a few cycles. **Look-ahead on index-line fills provides the benefit.** The full evaluation is in `results/endterm/phase4b/phase4b_summary.md`.
+
+## 7. Evaluation summary (184 runs, all validated)
+
+Full tables: `results/endterm/phase4b/phase4b_summary.md`; raw data: `phase4b_all.csv`. Speedup is over the L1D stride prefetcher. "Indirect-only" = VIP vs. VIP with `enable_indirect=False`; it separates the new mechanism from the virtual-address stride mode, which alone gives up to 1.07×.
+
+| Input | `rvv_orig` total / indirect-only | `rvv_opt_m1` | `rvv_acc2_m1` | scalar |
+|---|---:|---:|---:|---:|
+| uniform, `x` = 512 KiB | **1.40× / 1.39×** | 1.01× | **1.86×** | 1.01× |
+| power-law, `x` = 512 KiB | **1.43× / 1.42×** | **3.02×** | 1.61× | 1.01× |
+| uniform / power-law, `x` = 2 MiB | 1.07× / 1.06×; 1.08× / 1.08× | 1.00× | 1.75×; 1.60× | 1.00× |
+| uniform / power-law, `x` = 128 KiB | 0.98× / 0.98×; 0.98× / 0.97× | 1.02×; 1.43× | 1.16×; **0.82×** | 1.02–1.03× |
+| `x` ≤ 32 KiB (gathers hit) | 1.04–1.06× / 1.00–1.01× | 1.04–1.05× | 1.02–1.06× | 1.03× |
+| web-NotreDame | 1.12× / 1.08× | 1.31× | 1.00× | 1.02× |
+| scircuit (VLEN 256 / 512) | 1.10× / 1.08× (VLEN 512: **1.35×**) | 1.02× | 1.10× | 1.02× |
+| bcsstk17 | 1.07× / 1.00× | 1.07× | 1.02× | 1.02× |
+| luxembourg_osm | 0.96× / 0.94× | 1.01× | 1.01× | 1.01× |
+
+What the counters show (`rvv_orig`, uniform 512 KiB `x`):
+- L1D primary miss rate 55.0% → 6.8%;
+- L1D prefetch accuracy 24% → 63%, coverage 12% → 86%;
+- LQ-full events 628,548 → 335,264;
+- about 237K look-ahead targets.
+
+The gain comes from look-ahead: the indirect part without look-ahead gives ≤ 1.06×.
+
+**Limits (open):**
+1. **DRAM-resident `x` (2 MiB):** for `rvv_orig`, coverage only 27% and L2 miss rate stays at 71%. Suspected limit: the 16 L1D MSHRs and DRAM latency.
+2. **Learning is sometimes missed.** `rvv_opt_m1` issues no targets on uniform rows (it learns on power-law rows and on web-NotreDame). Suspected cause: index loads running more than 32 index vectors ahead of their gathers.
+3. **Losses where gathers already hit or the pattern churns** (luxembourg_osm 0.96×, power-law 128 KiB `rvv_acc2_m1` 0.82×). There is no accuracy throttle.
+
+The follow-up studies for 1 and 2 are scripted (`scripts/run_phase4b_extra.sh`: history depth 4–128 and L1D MSHRs 16/32/64) but **not run yet**. See §9.
+
+## 8. Hardware storage estimate (analytic)
+
+From `scripts/vip_storage.py` (all bit widths are stated in the script: RV64 Sv39 virtual addresses, 44-bit physical addresses, 64-byte lines, 32-bit indices, 16 VIST entries, 2 shifts, 64-entry dedup filter and pending queue).
+- **Per-stream:** every VIST entry has its own index history, exactly what the simulator models.
+- **Shared:** 2 history buffers shared by the streams being trained or checked. In all runs only 2 streams (the index and value streams of the kernel) were active.
+- The candidate buffer is the simulator's upper bound: every (index × shift) candidate of the history kept during learning.
+
+Per-VIST-entry scalar fields (bits):
+
+| field | bits |
+|---|---:|
+| valid | 1 |
+| pc tag | 39 |
+| last index VA | 39 |
+| last index PPN | 32 |
+| last access size | 9 |
+| sequential confidence | 3 |
+| LRU | 4 |
+| history position | 5 |
+| history count | 6 |
+| gather PC | 39 |
+| enabled | 1 |
+| base (VA) | 39 |
+| shift select | 1 |
+| samples | 2 |
+| check counter | 3 |
+| consecutive fails | 7 |
+| **total (history depth 32)** | **230** |
+
+| history depth | history / stream | candidate buffer | dedup + pending queues | **per-stream total** | **shared total (2 history buffers)** |
+|---:|---:|---:|---:|---:|---:|
+| 4 | 0.25 KiB | 0.62 KiB | 0.56 KiB | 5.66 KiB | 2.13 KiB |
+| 8 | 0.50 KiB | 1.25 KiB | 0.56 KiB | 10.33 KiB | 3.26 KiB |
+| 16 | 1.01 KiB | 2.50 KiB | 0.56 KiB | 19.66 KiB | 5.53 KiB |
+| 32 | 2.02 KiB | 5.00 KiB | 0.56 KiB | 38.32 KiB | 10.05 KiB |
+| 64 | 4.04 KiB | 10.00 KiB | 0.56 KiB | 75.64 KiB | 19.09 KiB |
+| 128 | 8.08 KiB | 20.00 KiB | 0.56 KiB | 150.27 KiB | 37.18 KiB |
+
+**Reading:**
+- At the evaluated default (history depth 32), the as-simulated structure is about **38 KiB**, larger than the 32 KiB L1D it serves. The realistic shared organisation is about **10 KiB**.
+- The history and the learning-time candidate buffer dominate. The streaming part (VIST scalar fields, dedup filter, pending queue) is about 1.0 KiB.
+- **A cheap design (≈ 2–3 KiB with history depth 4–8) is only claimable if the history-depth study shows the speedups survive.** Until then, the honest statement is "≈ 10 KiB (shared organisation) at the evaluated configuration".
+- No RTL/Yosys synthesis was done (stretch goal not attempted).
+
+## 9. Status of the follow-up work
+
+- gem5 was rebuilt with a `history_depth` parameter (default 32, same behaviour), and `configs/sparse_rvv.py` gained `--l1d-mshrs`. The patch was regenerated and verified (byte-identical round trip).
+- **Regression subtlety found:** program arguments affect timing slightly. The main batch passed `alpha=1.8` (unused for uniform inputs); a check run without it gave 1,388,982 instead of 1,389,015 stride cycles (−0.002%) and 991,706 instead of 990,512 VIP cycles (+0.12%). The argument string changes the initial stack layout. The follow-up script now passes byte-identical arguments. **With identical arguments, the rebuilt gem5 + new config reproduce the main batch exactly:** 1,389,015 stride and 990,512 VIP cycles (`results/endterm/phase4b_prep/regress3_*`).
+- The 70-run follow-up batch was **not started**: the host was on battery and repeatedly suspended (two 2-minute runs took 87 min). Run it on mains power: `scripts/env.sh scripts/run_phase4b_extra.sh` (about 30 min), then `python3 scripts/phase4b_report.py`.

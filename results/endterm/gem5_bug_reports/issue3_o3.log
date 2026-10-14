@@ -1,0 +1,61 @@
+Global frequency set at 1000000000000 ticks per second
+src/arch/riscv/isa.cc:321: info: RVV enabled, VLEN = 256 bits, ELEN = 64 bits
+src/base/statistics.hh:279: warn: One of the stats is a legacy stat. Legacy stat is a stat that does not belong to any statistics::Group. Legacy stat is deprecated.
+src/base/stats/storage.hh:278: warn: Bucket size (4) does not divide range [1:32] into equal-sized buckets. Rounding up.
+src/base/stats/storage.hh:278: warn: Bucket size (4) does not divide range [1:8] into equal-sized buckets. Rounding up.
+src/base/remote_gdb.cc:418: warn: Sockets disabled, not accepting gdb connections
+gem5 Simulator System.  https://www.gem5.org
+gem5 is copyrighted software; use the --copyright option for details.
+
+gem5 version 25.1.0.1
+gem5 compiled Aug 29 2026 12:59:38
+gem5 started Oct 13 2026 20:32:11
+gem5 executing on 1ee6f7df9190, pid 39
+command line: /workspace/gem5/build/RISCV/gem5.opt.pre-sparse-backup -d /project/results/endterm/gem5_bug_reports/issue3_o3 /project/docs/gem5_bug_reports/repro/se_riscv_rvv.py --binary /project/results/endterm/gem5_bug_reports/issue3 --cpu o3
+
+info: Standard input is not a terminal, disabling listeners.
+src/sim/syscall_emul.cc:97: warn: ignoring syscall set_robust_list(...)
+      (further warnings will be suppressed)
+src/sim/syscall_emul.hh:1127: warn: readlink() called on '/proc/self/exe' may yield unexpected results in various settings.
+      Returning '/project/results/endterm/gem5_bug_reports/issue3'
+src/sim/mem_state.cc:443: info: Increasing stack size by one page.
+src/sim/syscall_emul.cc:86: warn: ignoring syscall mprotect(...)
+src/sim/faults.cc:103: panic: panic condition !handled && !tc->getSystemPtr()->trapToGdb(GDBSignal::SEGV, tc->contextId()) occurred: Page table fault when accessing virtual address 0xfdab4194
+Memory Usage: 8555996 KBytes
+Program aborted at tick 513247000
+--- BEGIN LIBC BACKTRACE ---
+/workspace/gem5/build/RISCV/gem5.opt.pre-sparse-backup(_ZN4gem515print_backtraceEv+0x40)[0xaaaabe2b3b40]
+/workspace/gem5/build/RISCV/gem5.opt.pre-sparse-backup(_ZN4gem512abortHandlerEi+0x60)[0xaaaabe2ddff0]
+linux-vdso.so.1(__kernel_rt_sigreturn+0x0)[0xffff8cf17800]
+/lib/aarch64-linux-gnu/libc.so.6(+0x874d8)[0xffff8bbc74d8]
+/lib/aarch64-linux-gnu/libc.so.6(gsignal+0x1c)[0xffff8bb7cb3c]
+/lib/aarch64-linux-gnu/libc.so.6(abort+0xf4)[0xffff8bb67e00]
+/workspace/gem5/build/RISCV/gem5.opt.pre-sparse-backup(+0xc85718)[0xaaaabce75718]
+/workspace/gem5/build/RISCV/gem5.opt.pre-sparse-backup(_ZN4gem521GenericPageTableFault6invokeEPNS_13ThreadContextERKNS_14RefCountingPtrINS_10StaticInstEEE+0x138)[0xaaaabe353f68]
+/workspace/gem5/build/RISCV/gem5.opt.pre-sparse-backup(_ZN4gem52o36Commit10commitHeadERKNS_14RefCountingPtrINS0_7DynInstEEEj+0x4f4)[0xaaaabd3f32b4]
+/workspace/gem5/build/RISCV/gem5.opt.pre-sparse-backup(_ZN4gem52o36Commit11commitInstsEv+0x2f8)[0xaaaabd3f3f58]
+/workspace/gem5/build/RISCV/gem5.opt.pre-sparse-backup(_ZN4gem52o36Commit6commitEv+0x6cc)[0xaaaabd3f5250]
+/workspace/gem5/build/RISCV/gem5.opt.pre-sparse-backup(_ZN4gem52o36Commit4tickEv+0xc8)[0xaaaabd3f56a8]
+/workspace/gem5/build/RISCV/gem5.opt.pre-sparse-backup(_ZN4gem52o33CPU4tickEv+0x158)[0xaaaabd3fe0c8]
+/workspace/gem5/build/RISCV/gem5.opt.pre-sparse-backup(_ZN4gem510EventQueue10serviceOneEv+0xdc)[0xaaaabe2caacc]
+/workspace/gem5/build/RISCV/gem5.opt.pre-sparse-backup(_ZN4gem59doSimLoopEPNS_10EventQueueE+0xc8)[0xaaaabe2fc428]
+/workspace/gem5/build/RISCV/gem5.opt.pre-sparse-backup(_ZN4gem58simulateEm+0x254)[0xaaaabe2fcc54]
+/workspace/gem5/build/RISCV/gem5.opt.pre-sparse-backup(+0xe7c0fc)[0xaaaabd06c0fc]
+/workspace/gem5/build/RISCV/gem5.opt.pre-sparse-backup(+0xccb9d8)[0xaaaabcebb9d8]
+/lib/aarch64-linux-gnu/libpython3.12.so.1.0(+0x1d6754)[0xffff8c7f6754]
+/lib/aarch64-linux-gnu/libpython3.12.so.1.0(_PyObject_Call+0x64)[0xffff8c7a0b74]
+/lib/aarch64-linux-gnu/libpython3.12.so.1.0(_PyEval_EvalFrameDefault+0x7a8)[0xffff8c73af28]
+/lib/aarch64-linux-gnu/libpython3.12.so.1.0(PyEval_EvalCode+0x23c)[0xffff8c8afd3c]
+/lib/aarch64-linux-gnu/libpython3.12.so.1.0(+0x28bff4)[0xffff8c8abff4]
+/lib/aarch64-linux-gnu/libpython3.12.so.1.0(+0x1d6e00)[0xffff8c7f6e00]
+/lib/aarch64-linux-gnu/libpython3.12.so.1.0(PyObject_Vectorcall+0x58)[0xffff8c79ee98]
+/lib/aarch64-linux-gnu/libpython3.12.so.1.0(_PyEval_EvalFrameDefault+0x395c)[0xffff8c73e0dc]
+/workspace/gem5/build/RISCV/gem5.opt.pre-sparse-backup(+0xe55a84)[0xaaaabd045a84]
+/workspace/gem5/build/RISCV/gem5.opt.pre-sparse-backup(main+0x1a4)[0xaaaabce50904]
+/lib/aarch64-linux-gnu/libc.so.6(+0x284c4)[0xffff8bb684c4]
+/lib/aarch64-linux-gnu/libc.so.6(__libc_start_main+0x98)[0xffff8bb68598]
+/workspace/gem5/build/RISCV/gem5.opt.pre-sparse-backup(_start+0x30)[0xaaaabce747f0]
+--- END LIBC BACKTRACE ---
+For more info on how to address this issue, please visit https://www.gem5.org/documentation/general_docs/common-errors/ 
+
+exit=134

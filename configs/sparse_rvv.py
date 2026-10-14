@@ -9,6 +9,7 @@ change what they name.
         --program-args key=value ...
 """
 import argparse
+import ast
 import os
 
 import m5.objects
@@ -41,16 +42,34 @@ parser.add_argument("--l1d-pf", default="stride",
                     help="L1D prefetcher: stride (default), none, or a gem5 prefetcher "
                          "SimObject class name (e.g. VectorIndirectPrefetcher)")
 parser.add_argument("--l2-pf", default="stride", help="L2 prefetcher: stride (default) or none")
+parser.add_argument("--l1d-mshrs", type=int, default=None,
+                    help="L1D MSHRs (stdlib default 16)")
+parser.add_argument("--l1d-pf-param", action="append", default=[], metavar="KEY=VALUE",
+                    help="set a parameter of the L1D prefetcher (repeatable), "
+                         "e.g. enable_lookahead=False")
 parser.add_argument("--program-args", nargs="*", default=[])
 args = parser.parse_args()
 
 
-def make_prefetcher(name):
+def parse_value(text):
+    try:
+        return ast.literal_eval(text)
+    except (ValueError, SyntaxError):
+        return text  # e.g. memory sizes such as 2KiB
+
+
+def make_prefetcher(name, core=None, params=()):
     if name == "none":
         return NULL
-    if name == "stride":
-        return m5.objects.StridePrefetcher()
-    return getattr(m5.objects, name)()
+    pf = m5.objects.StridePrefetcher() if name == "stride" else getattr(m5.objects, name)()
+    # Prefetchers with an `mmu` parameter (VectorIndirectPrefetcher) translate
+    # page-crossing prefetches through the core's MMU.
+    if core is not None and "mmu" in type(pf)._params:
+        pf.mmu = core.mmu
+    for kv in params:
+        key, _, value = kv.partition("=")
+        setattr(pf, key, parse_value(value))
+    return pf
 
 
 class PrefetchSelectableHierarchy(PrivateL1PrivateL2CacheHierarchy):
@@ -61,15 +80,21 @@ class PrefetchSelectableHierarchy(PrivateL1PrivateL2CacheHierarchy):
     With both set to "stride" nothing is changed.
     """
 
-    def __init__(self, l1d_pf, l2_pf, **kwargs):
+    def __init__(self, l1d_pf, l2_pf, l1d_pf_params=(), l1d_mshrs=None, **kwargs):
         super().__init__(**kwargs)
         self._l1d_pf, self._l2_pf = l1d_pf, l2_pf
+        self._l1d_pf_params = list(l1d_pf_params)
+        self._l1d_mshrs = l1d_mshrs
 
     def incorporate_cache(self, board):
         super().incorporate_cache(board)
+        cores = board.get_processor().get_cores()
         for i in range(board.get_processor().get_num_cores()):
-            if self._l1d_pf != "stride":
-                getattr(self, f"l1d-cache-{i}").prefetcher = make_prefetcher(self._l1d_pf)
+            if self._l1d_mshrs is not None:
+                getattr(self, f"l1d-cache-{i}").mshrs = self._l1d_mshrs
+            if self._l1d_pf != "stride" or self._l1d_pf_params:
+                getattr(self, f"l1d-cache-{i}").prefetcher = make_prefetcher(
+                    self._l1d_pf, cores[i].core, self._l1d_pf_params)
             if self._l2_pf != "stride":
                 getattr(self, f"l2-cache-{i}").prefetcher = make_prefetcher(self._l2_pf)
 
@@ -96,7 +121,7 @@ board = SimpleBoard(
     processor=BaseCPUProcessor(cores=[RVVCore()]),
     memory=SingleChannelDDR3_1600(),
     cache_hierarchy=PrefetchSelectableHierarchy(
-        args.l1d_pf, args.l2_pf,
+        args.l1d_pf, args.l2_pf, args.l1d_pf_param, args.l1d_mshrs,
         l1d_size=args.l1d_size, l1i_size=args.l1i_size, l2_size=args.l2_size,
     ),
 )
@@ -107,6 +132,7 @@ board.set_se_binary_workload(
 
 print(f"sparse_rvv: cpu={args.cpu} VLEN={args.vlen} ELEN={args.elen} "
       f"LQ={args.lq_entries or 'default'} SQ={args.sq_entries or 'default'} "
-      f"L1D={args.l1d_size} L2={args.l2_size} l1d_pf={args.l1d_pf} l2_pf={args.l2_pf}")
+      f"L1D={args.l1d_size} L2={args.l2_size} l1d_pf={args.l1d_pf} l2_pf={args.l2_pf} "
+      f"l1d_pf_params={','.join(args.l1d_pf_param) or '-'} l1d_mshrs={args.l1d_mshrs or 'default'}")
 print(f"Binary: {binary_path} args: {' '.join(args.program_args)}")
 Simulator(board=board).run()

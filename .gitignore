@@ -46,3 +46,8 @@ hw/**/*.log
 *.swp
 .vscode/
 .idea/
+
+# gem5 bug-report reproducers: keep the .log evidence, not binaries / raw gem5 output
+results/endterm/gem5_bug_reports/issue[1-4]
+results/endterm/gem5_bug_reports/*/
+docs/gem5_bug_reports/repro/out/

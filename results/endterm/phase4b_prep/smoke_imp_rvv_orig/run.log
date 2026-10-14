@@ -1,0 +1,65 @@
+Global frequency set at 1000000000000 ticks per second
+src/arch/riscv/isa.cc:321: info: RVV enabled, VLEN = 256 bits, ELEN = 64 bits
+src/base/statistics.hh:279: warn: One of the stats is a legacy stat. Legacy stat is a stat that does not belong to any statistics::Group. Legacy stat is deprecated.
+src/base/stats/storage.hh:278: warn: Bucket size (4) does not divide range [1:32] into equal-sized buckets. Rounding up.
+src/base/stats/storage.hh:278: warn: Bucket size (4) does not divide range [1:8] into equal-sized buckets. Rounding up.
+src/base/remote_gdb.cc:418: warn: Sockets disabled, not accepting gdb connections
+gem5 Simulator System.  https://www.gem5.org
+gem5 is copyrighted software; use the --copyright option for details.
+
+gem5 version 25.1.0.1
+gem5 compiled Oct 13 2026 19:55:19
+gem5 started Oct 13 2026 19:57:37
+gem5 executing on 4cf94051568b, pid 21
+command line: /workspace/gem5/build/RISCV/gem5.opt -d results/endterm/phase4b_prep/smoke_imp_rvv_orig configs/sparse_rvv.py --binary build/bench --l1d-pf IndirectMemoryPrefetcher --program-args kernel=rvv_orig gen=uniform rows=4096 cols=131072 nnz_per_row=16 seed=1
+
+info: Standard input is not a terminal, disabling listeners.
+sparse_rvv: cpu=o3 VLEN=256 ELEN=64 LQ=default SQ=default L1D=32KiB L2=512KiB l1d_pf=IndirectMemoryPrefetcher l2_pf=stride l1d_pf_params=-
+Binary: /project/build/bench args: kernel=rvv_orig gen=uniform rows=4096 cols=131072 nnz_per_row=16 seed=1
+src/sim/syscall_emul.cc:97: warn: ignoring syscall set_robust_list(...)
+      (further warnings will be suppressed)
+src/sim/syscall_emul.hh:1127: warn: readlink() called on '/proc/self/exe' may yield unexpected results in various settings.
+      Returning '/project/build/bench'
+src/sim/mem_state.cc:443: info: Increasing stack size by one page.
+src/sim/syscall_emul.cc:86: warn: ignoring syscall mprotect(...)
+src/mem/cache/prefetch/base.hh:229: panic: PrefetchInfo::get called with a request with no data.
+Memory Usage: 8556152 KBytes
+Program aborted at tick 17192000
+--- BEGIN LIBC BACKTRACE ---
+/workspace/gem5/build/RISCV/gem5.opt(_ZN4gem515print_backtraceEv+0x40)[0xaaaac58772b0]
+/workspace/gem5/build/RISCV/gem5.opt(_ZN4gem512abortHandlerEi+0x60)[0xaaaac589f760]
+linux-vdso.so.1(__kernel_rt_sigreturn+0x0)[0xffff9655d800]
+/lib/aarch64-linux-gnu/libc.so.6(+0x874d8)[0xffff952174d8]
+/lib/aarch64-linux-gnu/libc.so.6(gsignal+0x1c)[0xffff951ccb3c]
+/lib/aarch64-linux-gnu/libc.so.6(abort+0xf4)[0xffff951b7e00]
+/workspace/gem5/build/RISCV/gem5.opt(+0xc88058)[0xaaaac4438058]
+/workspace/gem5/build/RISCV/gem5.opt(+0x267687c)[0xaaaac5e2687c]
+/workspace/gem5/build/RISCV/gem5.opt(_ZN4gem58prefetch14IndirectMemory17calculatePrefetchERKNS0_4Base12PrefetchInfoERSt6vectorISt4pairImiESaIS8_EERKNS_13CacheAccessorE+0x504)[0xaaaac5e27378]
+/workspace/gem5/build/RISCV/gem5.opt(_ZN4gem58prefetch6Queued6notifyERKNS_19CacheAccessProbeArgERKNS0_4Base12PrefetchInfoE+0xd4)[0xaaaac5e36294]
+/workspace/gem5/build/RISCV/gem5.opt(_ZN4gem58prefetch4Base11probeNotifyERKNS_19CacheAccessProbeArgEb+0x1b8)[0xaaaac5e0d05c]
+/workspace/gem5/build/RISCV/gem5.opt(_ZN4gem59BaseCache13recvTimingReqEPNS_6PacketE+0x150)[0xaaaac5c51aa4]
+/workspace/gem5/build/RISCV/gem5.opt(_ZN4gem59BaseCache11CpuSidePort13recvTimingReqEPNS_6PacketE+0x8c)[0xaaaac5c4caec]
+/workspace/gem5/build/RISCV/gem5.opt(_ZN4gem52o37LSQUnit13trySendPacketEbPNS_6PacketE+0x13c)[0xaaaac4a2bd0c]
+/workspace/gem5/build/RISCV/gem5.opt(_ZN4gem52o33LSQ17SingleDataRequest17sendPacketToCacheEv+0x38)[0xaaaac4a0f408]
+/workspace/gem5/build/RISCV/gem5.opt(_ZN4gem52o37LSQUnit4readEPNS0_3LSQ10LSQRequestEl+0x974)[0xaaaac4a2a994]
+/workspace/gem5/build/RISCV/gem5.opt(_ZN4gem52o33LSQ4readEPNS1_10LSQRequestEl+0x148)[0xaaaac4a11b28]
+/workspace/gem5/build/RISCV/gem5.opt(_ZN4gem52o33LSQ11pushRequestERKNS_14RefCountingPtrINS0_7DynInstEEEbPhjmNS_5FlagsImEEPmSt10unique_ptrINS_15AtomicOpFunctorESt14default_deleteISC_EERKSt6vectorIbSaIbEE+0x550)[0xaaaac4a19584]
+/workspace/gem5/build/RISCV/gem5.opt(_ZN4gem52o37DynInst15initiateMemReadEmjNS_5FlagsImEERKSt6vectorIbSaIbEE+0x98)[0xaaaac49d55f8]
+/workspace/gem5/build/RISCV/gem5.opt(_ZNK4gem512RiscvISAInst2Lw11initiateAccEPNS_11ExecContextEPNS_5trace10InstRecordE+0xa0)[0xaaaac52f8b40]
+/workspace/gem5/build/RISCV/gem5.opt(_ZN4gem52o37DynInst11initiateAccEv+0x5c)[0xaaaac49d3e9c]
+/workspace/gem5/build/RISCV/gem5.opt(_ZN4gem52o37LSQUnit11executeLoadERKNS_14RefCountingPtrINS0_7DynInstEEE+0xbc)[0xaaaac4a2823c]
+/workspace/gem5/build/RISCV/gem5.opt(_ZN4gem52o33LSQ11executeLoadERKNS_14RefCountingPtrINS0_7DynInstEEE+0x40)[0xaaaac4a10040]
+/workspace/gem5/build/RISCV/gem5.opt(_ZN4gem52o33IEW12executeInstsEv+0x8cc)[0xaaaac49f940c]
+/workspace/gem5/build/RISCV/gem5.opt(_ZN4gem52o33IEW4tickEv+0x50c)[0xaaaac49fa280]
+/workspace/gem5/build/RISCV/gem5.opt(_ZN4gem52o33CPU4tickEv+0x14c)[0xaaaac49bd9fc]
+/workspace/gem5/build/RISCV/gem5.opt(_ZN4gem510EventQueue10serviceOneEv+0xdc)[0xaaaac588e23c]
+/workspace/gem5/build/RISCV/gem5.opt(_ZN4gem59doSimLoopEPNS_10EventQueueE+0xc8)[0xaaaac58bdb98]
+/workspace/gem5/build/RISCV/gem5.opt(_ZN4gem58simulateEm+0x254)[0xaaaac58be3c4]
+/workspace/gem5/build/RISCV/gem5.opt(+0xe7fa3c)[0xaaaac462fa3c]
+/workspace/gem5/build/RISCV/gem5.opt(+0xccf318)[0xaaaac447f318]
+/lib/aarch64-linux-gnu/libpython3.12.so.1.0(+0x1d6754)[0xffff95e46754]
+--- END LIBC BACKTRACE ---
+For more info on how to address this issue, please visit https://www.gem5.org/documentation/general_docs/common-errors/ 
+
+HOST_SECONDS=1
+EXIT_STATUS=134

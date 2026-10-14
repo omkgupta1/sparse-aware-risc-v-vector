@@ -1,0 +1,615 @@
+# Sparse-Aware RISC-V Vector project: gem5 changes (Vector-Indirect Prefetcher).
+# Base: gem5 v25.1.0.1 (commit a28ae2f8b2). Apply with scripts/apply_gem5_patch.sh.
+diff -ruN a/src/mem/cache/prefetch/Prefetcher.py b/src/mem/cache/prefetch/Prefetcher.py
+--- a/src/mem/cache/prefetch/Prefetcher.py	2026-10-14 15:34:22
++++ b/src/mem/cache/prefetch/Prefetcher.py	2026-10-14 15:34:22
+@@ -222,6 +222,48 @@
+     )
+ 
+ 
++class VectorIndirectPrefetcher(StridePrefetcher):
++    """Stride prefetcher extended with vector-indirect (gather) prefetching.
++
++    Sparse-Aware RISC-V Vector project; see vector_indirect.hh.
++    """
++
++    type = "VectorIndirectPrefetcher"
++    cxx_class = "gem5::prefetch::VectorIndirect"
++    cxx_header = "mem/cache/prefetch/vector_indirect.hh"
++
++    # Train and prefetch on virtual addresses; gather targets are almost
++    # never on the page of the index access, so page-crossing prefetches are
++    # translated through the MMU below.
++    use_virtual_addresses = True
++    mmu = Param.BaseMMU(NULL, "MMU used to translate page-crossing prefetches")
++    queue_size = 64
++    max_prefetch_requests_with_pending_translation = 64
++
++    enable_indirect = Param.Bool(
++        True, "Enable gather-target prefetching (False = plain stride on VAs)"
++    )
++    enable_lookahead = Param.Bool(
++        True, "Also prefetch targets of index lines when they fill ahead"
++    )
++    vist_entries = Param.Unsigned(16, "Vector index-stream table entries")
++    history_depth = Param.Unsigned(
++        32, "Index accesses remembered per stream for pattern learning"
++    )
++    min_index_bytes = Param.Unsigned(
++        8, "Minimum access size treated as a vector index load"
++    )
++    max_targets_per_trigger = Param.Unsigned(
++        16, "Maximum target prefetches per index access / index line"
++    )
++    index_shifts = VectorParam.Unsigned(
++        [2, 3], "Candidate index-to-byte-offset shifts (element sizes 4, 8)"
++    )
++    lookahead_window = Param.MemorySize(
++        "1KiB", "How far beyond the current index access a filled index "
++        "line may be to trigger look-ahead prefetches",
++    )
++
+ class TaggedPrefetcher(QueuedPrefetcher):
+     type = "TaggedPrefetcher"
+     cxx_class = "gem5::prefetch::Tagged"
+diff -ruN a/src/mem/cache/prefetch/SConscript b/src/mem/cache/prefetch/SConscript
+--- a/src/mem/cache/prefetch/SConscript	2026-10-14 15:34:22
++++ b/src/mem/cache/prefetch/SConscript	2026-10-14 15:34:22
+@@ -37,7 +37,7 @@
+     'DeltaCorrelatingPredictionTables', 'DCPTPrefetcher',
+     'IrregularStreamBufferPrefetcher', 'SlimAMPMPrefetcher',
+     'BOPPrefetcher', 'SBOOEPrefetcher', 'STeMSPrefetcher', 'PIFPrefetcher',
+-    'FetchDirectedPrefetcher'
++    'FetchDirectedPrefetcher', 'VectorIndirectPrefetcher'
+     ])
+ 
+ Source('access_map_pattern_matching.cc')
+@@ -56,5 +56,6 @@
+ Source('slim_ampm.cc')
+ Source('spatio_temporal_memory_streaming.cc')
+ Source('stride.cc')
++Source('vector_indirect.cc')
+ Source('tagged.cc')
+ Source('fdp.cc')
+diff -ruN a/src/mem/cache/prefetch/vector_indirect.cc b/src/mem/cache/prefetch/vector_indirect.cc
+--- a/src/mem/cache/prefetch/vector_indirect.cc	1970-01-01 05:30:00
++++ b/src/mem/cache/prefetch/vector_indirect.cc	2026-10-14 15:34:22
+@@ -0,0 +1,377 @@
++/*
++ * Vector-Indirect Prefetcher (VIP). See vector_indirect.hh.
++ * Sparse-Aware RISC-V Vector project.
++ */
++
++#include "mem/cache/prefetch/vector_indirect.hh"
++
++#include <algorithm>
++#include <cstring>
++#include <iterator>
++
++#include "sim/byteswap.hh"
++#include "base/trace.hh"
++#include "debug/HWPrefetch.hh"
++#include "mem/cache/base.hh"
++#include "params/VectorIndirectPrefetcher.hh"
++
++namespace gem5
++{
++
++namespace prefetch
++{
++
++VectorIndirect::VectorIndirect(const VectorIndirectPrefetcherParams &p)
++  : Stride(p),
++    enableIndirect(p.enable_indirect),
++    enableLookahead(p.enable_lookahead),
++    minIndexBytes(p.min_index_bytes),
++    maxTargets(std::min<unsigned>(p.max_targets_per_trigger, MaxIdx)),
++    lookaheadWindow(p.lookahead_window),
++    shifts(p.index_shifts.begin(), p.index_shifts.end()),
++    historyDepth(std::max<unsigned>(p.history_depth, 1)),
++    vist(p.vist_entries),
++    viStats(this)
++{
++    if (p.mmu) {
++        addMMU(p.mmu);
++    }
++}
++
++VectorIndirect::VIStats::VIStats(statistics::Group *parent)
++  : statistics::Group(parent, "vip"),
++    ADD_STAT(indexAccesses, statistics::units::Count::get(),
++             "Accesses classified as vector index loads"),
++    ADD_STAT(indexAccessesWithData, statistics::units::Count::get(),
++             "Index accesses whose index values were available (hits)"),
++    ADD_STAT(indexAccessesNoData, statistics::units::Count::get(),
++             "Index accesses without data (misses)"),
++    ADD_STAT(patternsEnabled, statistics::units::Count::get(),
++             "Index streams for which (base, shift) was learned"),
++    ADD_STAT(patternsDisabled, statistics::units::Count::get(),
++             "Learned patterns dropped after losing confidence"),
++    ADD_STAT(gatherChecksOk, statistics::units::Count::get(),
++             "Gather accesses that matched the learned pattern"),
++    ADD_STAT(gatherChecksFailed, statistics::units::Count::get(),
++             "Gather accesses that did not match the learned pattern"),
++    ADD_STAT(immediateTargets, statistics::units::Count::get(),
++             "Target prefetches generated from index accesses"),
++    ADD_STAT(lookaheadFills, statistics::units::Count::get(),
++             "Index-stream line fills used for look-ahead"),
++    ADD_STAT(lookaheadTargets, statistics::units::Count::get(),
++             "Target prefetches generated from index-line fills"),
++    ADD_STAT(lookaheadPendingDropped, statistics::units::Count::get(),
++             "Look-ahead targets dropped because the pending queue was full"),
++    ADD_STAT(targetsDeduplicated, statistics::units::Count::get(),
++             "Target prefetches dropped: line requested recently")
++{
++}
++
++VectorIndirect::IndexStream *
++VectorIndirect::findStream(Addr pc)
++{
++    for (auto &s : vist) {
++        if (s.valid && s.pc == pc) {
++            s.lru = ++lruClock;
++            return &s;
++        }
++    }
++    return nullptr;
++}
++
++VectorIndirect::IndexStream *
++VectorIndirect::allocStream(Addr pc)
++{
++    IndexStream *victim = &vist[0];
++    for (auto &s : vist) {
++        if (!s.valid) {
++            victim = &s;
++            break;
++        }
++        if (s.lru < victim->lru) {
++            victim = &s;
++        }
++    }
++    if (victim->valid && victim->enabled) {
++        viStats.patternsDisabled++;
++    }
++    *victim = IndexStream();
++    victim->hist.resize(historyDepth);
++    victim->histN.assign(historyDepth, 0);
++    victim->valid = true;
++    victim->pc = pc;
++    victim->lru = ++lruClock;
++    return victim;
++}
++
++bool
++VectorIndirect::isRecentLine(Addr line)
++{
++    return std::find(recentLines.begin(), recentLines.end(), line) !=
++        recentLines.end();
++}
++
++void
++VectorIndirect::rememberLine(Addr line)
++{
++    recentLines[recentPos] = line;
++    recentPos = (recentPos + 1) % recentLines.size();
++}
++
++void
++VectorIndirect::readIndices(const uint8_t *data, unsigned bytes,
++                            IndexStream &s)
++{
++    s.histPos = (s.histPos + 1) % historyDepth;
++    const unsigned n = std::min<unsigned>(bytes / 4, MaxIdx);
++    for (unsigned e = 0; e < n; e++) {
++        uint32_t v;
++        std::memcpy(&v, data + 4 * e, sizeof(v));
++        s.hist[s.histPos][e] = letoh(v);
++    }
++    s.histN[s.histPos] = n;
++    s.histCount = std::min(s.histCount + 1, historyDepth);
++}
++
++bool
++VectorIndirect::matchesHistory(const IndexStream &s, Addr addr) const
++{
++    for (unsigned h = 0; h < s.histCount; h++) {
++        const unsigned slot = (s.histPos + historyDepth - h) % historyDepth;
++        for (unsigned e = 0; e < s.histN[slot]; e++) {
++            if (addr == s.base + (Addr(s.hist[slot][e]) << s.shift)) {
++                return true;
++            }
++        }
++    }
++    return false;
++}
++
++void
++VectorIndirect::trainOnGather(IndexStream &s, Addr pc, Addr addr)
++{
++    if (s.enabled) {
++        // Sampled check that gather accesses still follow the pattern.
++        if (pc != s.gatherPC || (++s.checkCounter % CheckEvery) != 0) {
++            return;
++        }
++        if (matchesHistory(s, addr)) {
++            s.consecutiveFails = 0;
++            viStats.gatherChecksOk++;
++        } else {
++            viStats.gatherChecksFailed++;
++            if (++s.consecutiveFails >= MaxConsecutiveFails) {
++                s.enabled = false;
++                s.candidates.clear();
++                s.samples = 0;
++                viStats.patternsDisabled++;
++            }
++        }
++        return;
++    }
++
++    // Candidate (base, shift) pairs explaining this gather access with any
++    // remembered index.
++    std::vector<std::pair<Addr, int>> cand;
++    for (int sh : shifts) {
++        for (unsigned h = 0; h < s.histCount; h++) {
++            const unsigned slot = (s.histPos + historyDepth - h) % historyDepth;
++            for (unsigned e = 0; e < s.histN[slot]; e++) {
++                Addr off = Addr(s.hist[slot][e]) << sh;
++                if (addr >= off) {
++                    cand.emplace_back(addr - off, sh);
++                }
++            }
++        }
++    }
++    std::sort(cand.begin(), cand.end());
++    cand.erase(std::unique(cand.begin(), cand.end()), cand.end());
++
++    if (s.samples == 0 || pc != s.gatherPC) {
++        s.candidates = std::move(cand);
++        s.gatherPC = pc;
++        s.samples = 1;
++        return;
++    }
++    std::vector<std::pair<Addr, int>> common;
++    std::set_intersection(s.candidates.begin(), s.candidates.end(),
++                          cand.begin(), cand.end(),
++                          std::back_inserter(common));
++    if (common.empty()) {
++        s.candidates = std::move(cand);  // restart from this sample
++        s.samples = 1;
++        return;
++    }
++    s.candidates = std::move(common);
++    s.samples++;
++    if (s.candidates.size() == 1 && s.samples >= MinSamples) {
++        s.enabled = true;
++        s.base = s.candidates[0].first;
++        s.shift = s.candidates[0].second;
++        s.consecutiveFails = 0;
++        viStats.patternsEnabled++;
++        DPRINTF(HWPrefetch, "VIP: index PC %#x -> gather PC %#x base %#x "
++                "shift %d\n", s.pc, pc, s.base, s.shift);
++    }
++}
++
++void
++VectorIndirect::addTargets(const IndexStream &s, const uint32_t *idx,
++                           unsigned n, std::vector<AddrPriority> &addresses,
++                           bool lookahead)
++{
++    n = std::min(n, maxTargets);
++    for (unsigned e = 0; e < n; e++) {
++        Addr target = s.base + (Addr(idx[e]) << s.shift);
++        Addr line = blockAddress(target);
++        if (isRecentLine(line)) {
++            viStats.targetsDeduplicated++;
++            continue;
++        }
++        rememberLine(line);
++        addresses.push_back(AddrPriority(target, 0));
++        if (lookahead) {
++            viStats.lookaheadTargets++;
++        } else {
++            viStats.immediateTargets++;
++        }
++    }
++}
++
++void
++VectorIndirect::notify(const CacheAccessProbeArg &acc,
++                       const PrefetchInfo &pfi)
++{
++    curPkt = acc.pkt;
++    Queued::notify(acc, pfi);
++    curPkt = nullptr;
++}
++
++void
++VectorIndirect::calculatePrefetch(const PrefetchInfo &pfi,
++                                  std::vector<AddrPriority> &addresses,
++                                  const CacheAccessor &cache)
++{
++    // Everything the stride prefetcher does is kept.
++    Stride::calculatePrefetch(pfi, addresses, cache);
++
++    if (!enableIndirect) {
++        return;
++    }
++    // Issue look-ahead targets queued by notifyFill() with this access
++    // (it carries a virtual address and context for translation).
++    while (!pendingTargets.empty()) {
++        addresses.push_back(pendingTargets.front());
++        pendingTargets.pop_front();
++    }
++    if (!pfi.hasPC() || pfi.isWrite()) {
++        return;
++    }
++    const Addr pc = pfi.getPC();
++    const Addr addr = pfi.getAddr();
++    const unsigned size = pfi.getSize();
++
++    if (size >= minIndexBytes && size % 4 == 0) {
++        // Candidate vector index load.
++        IndexStream *s = findStream(pc);
++        if (!s) {
++            s = allocStream(pc);
++        } else if (addr == s->lastAddr + s->lastSize) {
++            s->seqConf++;
++        } else if (addr != s->lastAddr) {
++            s->seqConf--;
++        }
++        s->lastAddr = addr;
++        s->lastPaddr = pfi.getPaddr();
++        s->lastSize = size;
++        viStats.indexAccesses++;
++
++        // The prefetcher is notified of a hit before the packet becomes a
++        // response: the block data has already been copied into the (still
++        // ReadReq) packet, but Packet::hasData() is false for requests, so
++        // test for a satisfied read instead.
++        const bool has_data = !pfi.isCacheMiss() && curPkt &&
++            curPkt->isRead() && curPkt->req->getSize() == size;
++        if (!has_data) {
++            viStats.indexAccessesNoData++;
++            return;
++        }
++        viStats.indexAccessesWithData++;
++        const Addr offset = curPkt->req->getPaddr() - curPkt->getAddr();
++        readIndices(curPkt->getConstPtr<uint8_t>() + offset, size, *s);
++
++        if (s->enabled) {
++            addTargets(*s, s->hist[s->histPos].data(), s->histN[s->histPos],
++                       addresses, false);
++        }
++        return;
++    }
++
++    if (size == 4 || size == 8) {
++        // Possible gather element access: train every sequential stream
++        // with index history (normally the index and the value streams; only
++        // the index stream can converge).
++        for (auto &s : vist) {
++            if (s.valid && s.histCount > 0 && s.pc != pc &&
++                s.seqConf.calcSaturation() > 0.0) {
++                trainOnGather(s, pc, addr);
++            }
++        }
++    }
++}
++
++void
++VectorIndirect::notifyFill(const CacheAccessProbeArg &acc)
++{
++    if (!enableIndirect || !enableLookahead) {
++        return;
++    }
++    const PacketPtr pkt = acc.pkt;
++    if (!pkt->hasData() || pkt->getSize() != blkSize) {
++        return;
++    }
++    const Addr line_pa = blockAddress(pkt->getAddr());
++
++    for (auto &s : vist) {
++        if (!s.valid || !s.enabled) {
++            continue;
++        }
++        // Virtual address of the filled line: from the request if it has
++        // one, else from the stream's last access when on the same page.
++        Addr line_va;
++        if (pkt->req->hasVaddr()) {
++            line_va = blockAddress(pkt->req->getVaddr());
++        } else if (samePage(line_pa, s.lastPaddr)) {
++            line_va = blockAddress(s.lastAddr) + line_pa -
++                blockAddress(s.lastPaddr);
++        } else {
++            continue;
++        }
++        const Addr cur = blockAddress(s.lastAddr);
++        if (line_va <= cur || line_va > cur + lookaheadWindow) {
++            continue;
++        }
++        viStats.lookaheadFills++;
++        uint32_t idx[MaxIdx];
++        const unsigned n = std::min<unsigned>(blkSize / 4, MaxIdx);
++        const uint8_t *data = pkt->getConstPtr<uint8_t>();
++        for (unsigned e = 0; e < n; e++) {
++            uint32_t v;
++            std::memcpy(&v, data + 4 * e, sizeof(v));
++            idx[e] = letoh(v);
++        }
++        std::vector<AddrPriority> targets;
++        addTargets(s, idx, n, targets, true);
++        for (auto &t : targets) {
++            if (pendingTargets.size() >= MaxPending) {
++                viStats.lookaheadPendingDropped++;
++                continue;
++            }
++            pendingTargets.push_back(t);
++        }
++        return;  // a line belongs to at most one index stream
++    }
++}
++
++} // namespace prefetch
++} // namespace gem5
+diff -ruN a/src/mem/cache/prefetch/vector_indirect.hh b/src/mem/cache/prefetch/vector_indirect.hh
+--- a/src/mem/cache/prefetch/vector_indirect.hh	1970-01-01 05:30:00
++++ b/src/mem/cache/prefetch/vector_indirect.hh	2026-10-14 15:34:22
+@@ -0,0 +1,157 @@
++/*
++ * Vector-Indirect Prefetcher (VIP)
++ *
++ * Sparse-Aware RISC-V Vector project. A stride prefetcher extended to
++ * prefetch the targets of RVV indexed loads (gathers) such as
++ *     vle32.v   vI, (col_idx)      # vector load of 32-bit indices
++ *     vluxei32.v vX, (x), vI'      # gather x[col_idx[k]]  (vI' = vI << 2)
++ * gem5's IndirectMemory prefetcher does not train on this pattern: it only
++ * reads indices from accesses of <= 8 bytes and assumes one index per access.
++ *
++ * Mechanism (on top of everything the inherited Stride prefetcher does):
++ *  1. Vector index-stream table (VIST): load PCs whose read accesses are
++ *     >= min_index_bytes, a multiple of 4 bytes, and sequential.
++ *  2. Indirect pattern learning: each stream keeps the indices of its last
++ *     few index accesses (hits, so the data is available). Out-of-order
++ *     execution lets later index loads run ahead of earlier gathers, so a
++ *     gather access (4/8-byte read from another PC) is matched against the
++ *     whole history: it yields candidate bases addr - (idx << s) for every
++ *     remembered index and shift s. Intersecting the candidates of several
++ *     gather accesses from the same PC leaves the true (base, shift). After
++ *     that, sampled gather accesses keep checking it; the pattern is dropped
++ *     after many consecutive mismatches.
++ *  3. Prefetching: (a) immediate - the target lines of every index of an
++ *     index access; (b) look-ahead - when a cache line of an enabled index
++ *     stream fills ahead of the demand stream (typically brought in by the
++ *     stride logic), the targets of all its indices. Fill packets of
++ *     prefetches carry no virtual address/context, so look-ahead targets are
++ *     queued and issued with the next demand access (which can be translated).
++ *
++ * Training and prefetching use virtual addresses; page-crossing prefetches are
++ * translated through the MMU given by the `mmu` parameter.
++ */
++
++#ifndef __MEM_CACHE_PREFETCH_VECTOR_INDIRECT_HH__
++#define __MEM_CACHE_PREFETCH_VECTOR_INDIRECT_HH__
++
++#include <array>
++#include <deque>
++#include <vector>
++
++#include "base/sat_counter.hh"
++#include "base/statistics.hh"
++#include "mem/cache/prefetch/stride.hh"
++
++namespace gem5
++{
++
++struct VectorIndirectPrefetcherParams;
++
++namespace prefetch
++{
++
++class VectorIndirect : public Stride
++{
++  public:
++    VectorIndirect(const VectorIndirectPrefetcherParams &p);
++
++    void notify(const CacheAccessProbeArg &acc,
++                const PrefetchInfo &pfi) override;
++    void calculatePrefetch(const PrefetchInfo &pfi,
++                           std::vector<AddrPriority> &addresses,
++                           const CacheAccessor &cache) override;
++    void notifyFill(const CacheAccessProbeArg &acc) override;
++
++  private:
++    static constexpr unsigned MaxIdx = 16;   // indices kept per access/line
++    static constexpr unsigned MinSamples = 3;  // gather samples to enable
++    static constexpr unsigned CheckEvery = 8;  // sampled pattern checks
++    // Disable a pattern only after this many consecutive failed checks
++    // (index loads can run far ahead of their gathers, so a correct gather
++    // access can fall outside the history window).
++    static constexpr unsigned MaxConsecutiveFails = 64;
++
++    struct IndexStream
++    {
++        bool valid = false;
++        Addr pc = 0;
++        Addr lastAddr = 0;            // VA of the last index access
++        Addr lastPaddr = 0;           // its PA (maps same-page fills to VAs)
++        unsigned lastSize = 0;
++        SatCounter8 seqConf{3, 0};    // sequential-stream confidence
++        uint64_t lru = 0;
++
++        // Indices of the last historyDepth index accesses that carried data.
++        std::vector<std::array<uint32_t, MaxIdx>> hist;
++        std::vector<uint8_t> histN;
++        unsigned histPos = 0;       // slot of the most recent entry
++        unsigned histCount = 0;
++
++        // Pattern learning / tracking.
++        std::vector<std::pair<Addr, int>> candidates;  // sorted (base, shift)
++        unsigned samples = 0;
++        unsigned checkCounter = 0;
++        unsigned consecutiveFails = 0;
++        Addr gatherPC = 0;
++        bool enabled = false;
++        Addr base = 0;
++        int shift = 0;
++    };
++
++    const bool enableIndirect;
++    const bool enableLookahead;
++    const unsigned minIndexBytes;
++    const unsigned maxTargets;
++    const Addr lookaheadWindow;
++    const std::vector<int> shifts;
++    const unsigned historyDepth;   // index accesses remembered per stream
++
++    std::vector<IndexStream> vist;
++    uint64_t lruClock = 0;
++
++    // Packet of the access being processed (set by notify()), used to read
++    // all index values of a vector access; PrefetchInfo::get only returns
++    // the first element.
++    PacketPtr curPkt = nullptr;
++
++    // Recently requested target lines, to avoid re-requesting the same line.
++    std::array<Addr, 64> recentLines{};
++    unsigned recentPos = 0;
++
++    // Look-ahead targets waiting for the next demand access to be issued.
++    std::deque<AddrPriority> pendingTargets;
++    static constexpr size_t MaxPending = 64;
++
++    IndexStream *findStream(Addr pc);
++    IndexStream *allocStream(Addr pc);
++    bool isRecentLine(Addr line);
++    void rememberLine(Addr line);
++    void readIndices(const uint8_t *data, unsigned bytes, IndexStream &s);
++    bool matchesHistory(const IndexStream &s, Addr addr) const;
++    void trainOnGather(IndexStream &s, Addr pc, Addr addr);
++    void addTargets(const IndexStream &s, const uint32_t *idx, unsigned n,
++                    std::vector<AddrPriority> &addresses, bool lookahead);
++
++    struct VIStats : public statistics::Group
++    {
++        VIStats(statistics::Group *parent);
++
++        statistics::Scalar indexAccesses;
++        statistics::Scalar indexAccessesWithData;
++        statistics::Scalar indexAccessesNoData;
++        statistics::Scalar patternsEnabled;
++        statistics::Scalar patternsDisabled;
++        statistics::Scalar gatherChecksOk;
++        statistics::Scalar gatherChecksFailed;
++        statistics::Scalar immediateTargets;
++        statistics::Scalar lookaheadFills;
++        statistics::Scalar lookaheadTargets;
++        statistics::Scalar lookaheadPendingDropped;
++        statistics::Scalar targetsDeduplicated;
++    } viStats;
++};
++
++} // namespace prefetch
++} // namespace gem5
++
++#endif // __MEM_CACHE_PREFETCH_VECTOR_INDIRECT_HH__

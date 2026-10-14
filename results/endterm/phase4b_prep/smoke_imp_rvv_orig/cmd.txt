@@ -1,0 +1,1 @@
+/workspace/gem5/build/RISCV/gem5.opt -d results/endterm/phase4b_prep/smoke_imp_rvv_orig configs/sparse_rvv.py --binary build/bench --l1d-pf IndirectMemoryPrefetcher --program-args kernel=rvv_orig gen=uniform rows=4096 cols=131072 nnz_per_row=16 seed=1 

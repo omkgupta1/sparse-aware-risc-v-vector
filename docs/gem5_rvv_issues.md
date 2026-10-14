@@ -1,6 +1,8 @@
 # gem5 25.1 RVV Correctness Issues Found in This Project
 
-Three functional bugs in gem5 25.1.0.1's **O3 CPU** model were found while validating the kernels (Phases 2–4). All produce wrong *architectural results* or crashes, not just wrong timing, and none occur on gem5's in-order MinorCPU or on QEMU. Issues 1 and 2 need LMUL ≥ 2; Issue 3 occurs at LMUL=1 with tail-undisturbed slides.
+Four gem5 25.1.0.1 problems were found while building and validating this project.
+- **Issues 1–3** are functional bugs in the **O3 CPU** model's RVV support. They produce wrong *architectural results* or crashes, not just wrong timing, and none occur on gem5's in-order MinorCPU or on QEMU. Issues 1 and 2 need LMUL ≥ 2; Issue 3 occurs at LMUL=1 with tail-undisturbed slides.
+- **Issue 4** is in the cache/prefetcher interface: gem5's `IndirectMemoryPrefetcher` panics on read hits.
 
 All the evidence can be regenerated with:
 
@@ -101,6 +103,28 @@ Evidence: `results/endterm/phase4a_gem5_compress_investigation/` (n=256 d=5% on 
 The gathered offsets come from the merged index buffer, so on O3 that buffer's register contents are stale. This is consistent with Issue 1 (reads after tail-undisturbed partial writes see stale register data), here at LMUL=1 with slide instructions.
 
 **Workaround used:** `gemv_compress_m1` stages the compacted values and indices in a small memory buffer (`vse32` at the fill position, `vle32` of a full vector when ready), with no register merging. It validates on O3, Minor and QEMU.
+
+## Issue 4: `IndirectMemoryPrefetcher` panics on read hits (classic caches, timing mode)
+
+**Symptom:** with `IndirectMemoryPrefetcher` as the L1D prefetcher, every run (scalar CSR *and* RVV) aborts:
+
+```
+panic: PrefetchInfo::get called with a request with no data.
+```
+
+Evidence: `results/endterm/phase4b_prep/smoke_imp_{rvv_orig,scalar}/run.log`.
+
+**Cause** (read in `src/mem/cache/base.cc` and `src/mem/cache/prefetch/base.cc`):
+1. `BaseCache::recvTimingReq` notifies the prefetcher of a hit (`ppHit`) right after `access()`. At that point `satisfyRequest()` has already copied the block data into the packet, but the packet is still a *request* (`ReadReq`). It only becomes a response later, in `handleTimingReqHit`.
+2. `PrefetchInfo::PrefetchInfo(pkt, addr, miss)` copies the data only if `pkt->hasData()`. That tests the command attribute, which is false for `ReadReq`, so `data` stays `nullptr` for every read hit.
+3. `IndirectMemory::calculatePrefetch` calls `pfi.get<T>()` on read hits of ≤ 8 bytes, which panics.
+
+So gem5's only indirect prefetcher cannot run in this configuration.
+
+**Consequence for this project:**
+- IMP cannot be used as a baseline.
+- The Vector-Indirect Prefetcher reads index values from the packet itself: it overrides `notify()` and treats "satisfied read hit" as having data.
+- The VIP does not touch `PrefetchInfo`, so it does not fix IMP. The fix would be in `PrefetchInfo` (copy data when `pkt->isRead() && !miss`); that is not part of this project's patch.
 
 ## Other gem5 observations (not bugs)
 

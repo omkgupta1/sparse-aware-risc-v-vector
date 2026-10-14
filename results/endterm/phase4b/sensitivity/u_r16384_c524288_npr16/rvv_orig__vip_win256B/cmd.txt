@@ -1,0 +1,1 @@
+/workspace/gem5/build/RISCV/gem5.opt -d results/endterm/phase4b/sensitivity/u_r16384_c524288_npr16/rvv_orig__vip_win256B configs/sparse_rvv.py --binary build/bench --l1d-pf VectorIndirectPrefetcher --l1d-pf-param lookahead_window=256B --program-args kernel=rvv_orig gen=uniform rows=16384 cols=524288 nnz_per_row=16 seed=1 
