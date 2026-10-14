@@ -1,0 +1,1 @@
+/workspace/gem5/build/RISCV/gem5.opt -d results/endterm/phase4b/history/u_r16384_c524288_npr16/rvv_acc2_m1__vip_h16 configs/sparse_rvv.py --binary build/bench --l1d-pf VectorIndirectPrefetcher --l1d-pf-param history_depth=16 --program-args kernel=rvv_acc2_m1 gen=uniform rows=16384 cols=524288 nnz_per_row=16 alpha=1.8 seed=1 

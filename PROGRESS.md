@@ -10,9 +10,9 @@ script-generated file under `results/endterm/`; the source file is named next to
 | 2. Proper baselines | ✅ Done (rvv_opt_m4 excluded: gem5 O3 bug) |
 | 3. Realistic workloads and sweeps | ✅ Done (316 runs; LMUL=2 gather kernels unreliable on gem5 O3) |
 | 4A. Software sparse-aware mechanism | ✅ Done (128/128 validated) |
-| 4B. Hardware mechanism: Vector-Indirect Prefetcher (gem5 C++) | ✅ Implemented and evaluated (184/184 runs validated); storage estimated. Follow-up history-depth / MSHR studies scripted but not run (host on battery) |
-| 5. Metrics, analysis, plots | ⏳ Not started |
-| 6. Reproducibility and documentation | ⏳ Partly started (Makefile, Docker env, gem5 issue write-up, gem5 bug-report drafts, PROJECT_SUMMARY.md) |
+| 4B. Hardware mechanism: Vector-Indirect Prefetcher (gem5 C++) | ✅ Done (254/254 runs validated, incl. history-depth and MSHR follow-ups); storage ≈ 2.1 KiB |
+| 5. Metrics, analysis, plots | ✅ Done (738-run metrics table, 8 figures) |
+| 6. Reproducibility and documentation | ✅ Done (run_all.sh, README, final report, RESUME_FACTS.md); new-repo commands given separately |
 
 ---
 
@@ -322,3 +322,75 @@ ROI cycles (speedup vs. scalar):
 | Modified | `.gitignore` | Ignores reproducer binaries and raw gem5 output |
 | Modified | `PROGRESS.md`, `PROJECT_SUMMARY.md` | Phase 4B results |
 | **Outside the repo** | `~/gem5-assignment/gem5/src/mem/cache/prefetch/{vector_indirect.hh,vector_indirect.cc,Prefetcher.py,SConscript}`; `build/RISCV/gem5.opt` rebuilt; original kept as `build/RISCV/gem5.opt.pre-sparse-backup` | The in-place gem5 change you approved. Restore the original binary with `cp gem5.opt.pre-sparse-backup gem5.opt`. |
+
+### Phase 4B follow-up (2026-10-14)
+
+`scripts/run_phase4b_extra.sh`: 70 runs, all validated (`results/endterm/phase4b/{history,mshr}/`; tables in `phase4b_summary.md`).
+- **History depth 4–128:** identical speedups at every depth on all 9 configurations (uniform `x` = 128 KiB / 512 KiB / 2 MiB × 3 kernels).
+  - Depth-32 runs reproduce the main Phase 4B runs exactly.
+  - **Depth 4 suffices, so storage is ≈ 2.1 KiB** (shared organisation; 5.7 KiB per-stream). Verified on the uniform sweep only.
+- **`rvv_opt_m1` issues 0 targets at every depth**, so the history-window hypothesis is **rejected**. The cause is still open.
+- **L1D MSHRs:**
+  - 2 MiB `x`, `rvv_acc2_m1`: 1.75× → 1.95× (32) → 1.96× (64). The MSHR limit is confirmed for this kernel.
+  - 2 MiB `x`, `rvv_orig`: 1.07× → 1.01×; its VIP run gets slower (1,947,754 → 2,069,207 cycles). The MSHR hypothesis is **rejected** for the midterm kernel.
+  - 512 KiB `x`, `rvv_orig`: 1.40× → 1.43×.
+
+## Phase 5: Metrics, analysis, plots (2026-10-14)
+
+**Done**
+- `scripts/phase5_metrics.py` → `results/endterm/phase5/all_runs_metrics.csv`: **738 runs** (Phases 2–4B), 712 validated, 43 columns. Per run:
+  - ROI time; speedup vs. scalar and vs. `rvv_orig` (same input, same binaries, same VLEN and prefetcher);
+  - lane utilisation; L1D raw/primary miss rate; L1D/L2 MPKI; L2 miss rate;
+  - DRAM bytes and bandwidth; LQ-full events;
+  - Phase 4A useful/zero/skipped work; Phase 4B prefetch accuracy, coverage and lateness.
+- `scripts/phase5_plots.py` → **8 figures** in `results/endterm/phase5/figures/` (PDF + PNG), each with its plotted data in `figure_data/*.csv`:
+  - speedup vs. density;
+  - **dense-vs-sparse crossover** (with the hybrid);
+  - lane utilisation vs. row length;
+  - VIP speedup;
+  - VIP memory behaviour (miss rate, DRAM traffic, LQ-full);
+  - VLEN sensitivity;
+  - LMUL sensitivity (dense);
+  - VIP history depth.
+
+  Each figure was rendered and checked by eye; label collisions were fixed.
+- `scripts/phase5_report.py` → `results/endterm/phase5/phase5_summary.md`: metric definitions and tables A–F.
+
+**Notes**
+- Colours: one fixed colour per entity across all figures, from the reference palette's documented slots 1–6. The palette validator could not be run (no Node.js on the host or in the container).
+- The LMUL figure covers dense kernels only, because LMUL ≥ 2 sparse gathers are unreliable (gem5 Issue 2).
+
+## Phase 6: Reproducibility and documentation (2026-10-14)
+
+**Done**
+- `scripts/run_all.sh`: builds, runs the QEMU tests, then any subset of phases (`PHASES="1 2 3 4a 4b 4b-extra 5"`, plus `bugs`). It checks that gem5 is patched before Phase 4B and downloads matrices when needed; completed runs are skipped.
+  - Not re-run end to end here: the full set takes about 6 h of simulation. Phase 5 and the individual phase scripts it calls were each run in this session.
+- Tool versions recorded in `README.md`: gem5 25.1.0.1 (`a28ae2f8b2`) + patch; `riscv64-linux-gnu-gcc` 14.2.0; QEMU 8.2.2; g++ 13.3.0; Ubuntu 24.04.4; Python 3.12.3 / matplotlib 3.6.3 / numpy 1.26.4.
+- `README.md` rewritten (status, headline results with sources, layout, reproduction, versions, document index). `docs/baseline_plan.md` stale status lines fixed.
+- **`docs/final_report.md`:** abstract, motivation, background, methodology, baseline characterisation, proposed architecture (Mermaid block diagram), results incl. follow-ups, crossover analysis, hardware overhead, simulator issues, limitations, future work, references.
+- **`RESUME_FACTS.md`:** 23 verified facts with run directories and stat names, labelled gem5 C++ / software / methodology. All 24 cited cycle counts were re-checked against the runs.
+
+**Open issues (end of project)**
+1. `rvv_opt_m1` does not train VIP on uniform rows (not the history depth); cause unknown.
+2. VIP has no accuracy throttle (worst case 0.82×).
+3. The `rvv_orig` gain with DRAM-resident `x` is small (1.07×) and not MSHR-limited; timeliness against DRAM latency is suspected but unproven.
+4. LMUL ≥ 2 gathers cannot be evaluated on gem5 25.1 O3 (Issue 2).
+5. The gem5 bug reports are drafted but not filed (`docs/gem5_bug_reports/`).
+
+#### Review summary (Phase 4B follow-up, Phase 5, Phase 6; all uncommitted)
+
+| Change | File(s) | What |
+|---|---|---|
+| Added | `results/endterm/phase4b/{history,mshr}/**`, `run_phase4b_extra.log` | 70 follow-up runs |
+| Modified | `results/endterm/phase4b/phase4b_{all.csv,summary.md}`, `scripts/phase4b_report.py` | History-depth and MSHR sections, regression check column |
+| Modified | `gem5_patches/sparse_aware.patch` | Regenerated: adds the `history_depth` parameter (default unchanged) |
+| Modified | `configs/sparse_rvv.py` | `--l1d-mshrs` |
+| Added | `scripts/run_phase4b_extra.sh`, `scripts/vip_storage.py` | Follow-up batch; analytic storage estimate |
+| Added | `scripts/phase5_metrics.py`, `scripts/phase5_plots.py`, `scripts/phase5_report.py` | Phase 5 pipeline |
+| Added | `results/endterm/phase5/{all_runs_metrics.csv,phase5_summary.md,figures/*,figure_data/*}` | Metrics table, report, 8 figures (PDF + PNG), figure data |
+| Added | `scripts/run_all.sh` | One-command reproduction |
+| Modified | `README.md`, `docs/baseline_plan.md` | Rewritten README; stale status fixed |
+| Added | `docs/final_report.md`, `RESUME_FACTS.md` | End-term report; verified resume facts |
+| Modified | `docs/phase4b_design.md`, `docs/gem5_bug_reports/{README.md,issue1–4.md}` | Follow-up results; related-issue sections and duplicate check |
+| Modified | `PROGRESS.md`, `PROJECT_SUMMARY.md` | Logs and summary |
+| **Outside the repo** | `~/gem5-assignment/gem5` (VIP source with `history_depth`; `gem5.opt` rebuilt) | Original binary still at `build/RISCV/gem5.opt.pre-sparse-backup` |

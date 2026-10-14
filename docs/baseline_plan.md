@@ -14,8 +14,9 @@
 - Validation: Compare output against a reference implementation
 - Metrics: Simulated execution time and gem5 statistics
 
-## Status
+## Status (updated 2026-10-14)
 - RISC-V compiler detected.
 - RVV compiler macros verified.
-- Custom binary execution in gem5: pending.
-- SpMV measurements: pending.
+- Custom binary execution in gem5: **done**. The vector-addition test ran in gem5 (`results/midterm/rvv_test/stats.txt`: 15,458 instructions, 11 committed vector operations). Its printed output was not saved; the end-term directed test `src/tests/rvv_lmul_check.c` checks vector results against QEMU explicitly.
+- SpMV measurements: **done** at 80% and 40% sparsity, both validated (`results/midterm/`, `docs/baseline_performance_report.md`).
+- Superseded by the end-term work: kernel-only (ROI) measurement, scalar and dense baselines, density/size/SuiteSparse sweeps, and the sparse-aware mechanisms. See `README.md` and `PROGRESS.md`.

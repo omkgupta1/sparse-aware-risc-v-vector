@@ -3,7 +3,7 @@
 ROI cycles from gem5 25.1 + `gem5_patches/sparse_aware.patch` (O3, VLEN=256 unless stated).
 Speedup = cycles with the L1D stride prefetcher / cycles with the named configuration, same binaries, same input. Only validated runs are used.
 
-Runs: 184 completed, 184 validated, 0 failed.
+Runs: 254 completed, 254 validated, 0 failed.
 
 ## VIP speedup over the stride prefetcher
 
@@ -117,3 +117,28 @@ VIP counters in the ROI (`rvv_orig`, VIP). Patterns are normally learned during 
 |---|---:|---:|---:|
 | scircuit | 4,352,115 | 3,222,778 | 1.35× |
 | u_r16384_c524288_npr16 | 1,996,519 | 1,921,323 | 1.04× |
+
+## VIP history-depth sensitivity (speedup over stride; target prefetches issued in the ROI)
+
+Default depth is 32. Its rows re-run the main configuration with the rebuilt gem5 and must reproduce the main Phase 4B VIP cycles exactly (check column).
+
+| input | kernel | depth 4 | depth 8 | depth 16 | depth 32 | depth 64 | depth 128 | depth 32 = main run? |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|
+| u_r16384_c032768_npr16 | rvv_orig | 0.99× (7,995) | 0.99× (10,110) | 0.99× (9,332) | 0.98× (12,434) | 0.98× (12,823) | 0.98× (14,219) | identical |
+| u_r16384_c032768_npr16 | rvv_opt_m1 | 1.02× (0) | 1.02× (0) | 1.02× (0) | 1.02× (0) | 1.02× (0) | 1.02× (0) | identical |
+| u_r16384_c032768_npr16 | rvv_acc2_m1 | 1.16× (192,235) | 1.16× (192,235) | 1.16× (192,235) | 1.16× (192,235) | 1.16× (192,235) | 1.16× (192,235) | identical |
+| u_r16384_c131072_npr16 | rvv_orig | 1.40× (242,202) | 1.40× (242,202) | 1.40× (242,202) | 1.40× (242,202) | 1.40× (242,202) | 1.40× (242,202) | identical |
+| u_r16384_c131072_npr16 | rvv_opt_m1 | 1.01× (0) | 1.01× (0) | 1.01× (0) | 1.01× (0) | 1.01× (0) | 1.01× (0) | identical |
+| u_r16384_c131072_npr16 | rvv_acc2_m1 | 1.86× (216,301) | 1.86× (216,301) | 1.86× (216,301) | 1.86× (209,834) | 1.86× (209,834) | 1.86× (216,301) | identical |
+| u_r16384_c524288_npr16 | rvv_orig | 1.07× (239,044) | 1.07× (239,044) | 1.07× (239,044) | 1.07× (239,044) | 1.07× (239,044) | 1.07× (239,044) | identical |
+| u_r16384_c524288_npr16 | rvv_opt_m1 | 1.00× (0) | 1.00× (0) | 1.00× (0) | 1.00× (0) | 1.00× (0) | 1.00× (0) | identical |
+| u_r16384_c524288_npr16 | rvv_acc2_m1 | 1.75× (212,426) | 1.75× (212,426) | 1.75× (212,426) | 1.75× (212,426) | 1.75× (212,426) | 1.75× (212,426) | identical |
+
+## L1D MSHR sensitivity (cycles; VIP speedup over stride at the same MSHR count)
+
+| input | kernel | 16 MSHRs (default): stride / VIP | 32 MSHRs | 64 MSHRs |
+|---|---:|---:|---:|---:|
+| u_r16384_c131072_npr16 | rvv_orig | 1,389,015 / 990,512 (1.40×) | 1,388,455 / 969,555 (1.43×) | 1,388,455 / 972,437 (1.43×) |
+| u_r16384_c131072_npr16 | rvv_acc2_m1 | 2,704,389 / 1,452,159 (1.86×) | 2,706,539 / 1,451,274 (1.86×) | 2,706,539 / 1,447,780 (1.87×) |
+| u_r16384_c524288_npr16 | rvv_orig | 2,084,368 / 1,947,754 (1.07×) | 2,099,796 / 2,069,207 (1.01×) | 2,099,796 / 2,069,207 (1.01×) |
+| u_r16384_c524288_npr16 | rvv_acc2_m1 | 4,441,666 / 2,538,439 (1.75×) | 4,441,967 / 2,283,215 (1.95×) | 4,441,967 / 2,264,768 (1.96×) |

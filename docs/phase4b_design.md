@@ -116,7 +116,7 @@ The gain comes from look-ahead: the indirect part without look-ahead gives ≤ 1
 2. **Learning is sometimes missed.** `rvv_opt_m1` issues no targets on uniform rows (it learns on power-law rows and on web-NotreDame). Suspected cause: index loads running more than 32 index vectors ahead of their gathers.
 3. **Losses where gathers already hit or the pattern churns** (luxembourg_osm 0.96×, power-law 128 KiB `rvv_acc2_m1` 0.82×). There is no accuracy throttle.
 
-The follow-up studies for 1 and 2 are scripted (`scripts/run_phase4b_extra.sh`: history depth 4–128 and L1D MSHRs 16/32/64) but **not run yet**. See §9.
+Follow-up results for 1 and 2 (`scripts/run_phase4b_extra.sh`, 70 runs, all validated) are in §9.
 
 ## 8. Hardware storage estimate (analytic)
 
@@ -157,13 +157,17 @@ Per-VIST-entry scalar fields (bits):
 | 128 | 8.08 KiB | 20.00 KiB | 0.56 KiB | 150.27 KiB | 37.18 KiB |
 
 **Reading:**
-- At the evaluated default (history depth 32), the as-simulated structure is about **38 KiB**, larger than the 32 KiB L1D it serves. The realistic shared organisation is about **10 KiB**.
+- At the main evaluation's history depth of 32, the as-simulated structure is about 38 KiB (larger than the 32 KiB L1D); the shared organisation is about 10 KiB.
+- **The history-depth study (§9) shows depth 4 gives the same speedups as depth 32** on all 9 tested configurations. So VIP needs **≈ 2.1 KiB** (shared organisation; ≈ 5.7 KiB with a history per entry), about 7% of the L1D.
 - The history and the learning-time candidate buffer dominate. The streaming part (VIST scalar fields, dedup filter, pending queue) is about 1.0 KiB.
-- **A cheap design (≈ 2–3 KiB with history depth 4–8) is only claimable if the history-depth study shows the speedups survive.** Until then, the honest statement is "≈ 10 KiB (shared organisation) at the evaluated configuration".
+- Caveat: the small depth was verified on the uniform size sweep only.
 - No RTL/Yosys synthesis was done (stretch goal not attempted).
 
 ## 9. Status of the follow-up work
 
 - gem5 was rebuilt with a `history_depth` parameter (default 32, same behaviour), and `configs/sparse_rvv.py` gained `--l1d-mshrs`. The patch was regenerated and verified (byte-identical round trip).
 - **Regression subtlety found:** program arguments affect timing slightly. The main batch passed `alpha=1.8` (unused for uniform inputs); a check run without it gave 1,388,982 instead of 1,389,015 stride cycles (−0.002%) and 991,706 instead of 990,512 VIP cycles (+0.12%). The argument string changes the initial stack layout. The follow-up script now passes byte-identical arguments. **With identical arguments, the rebuilt gem5 + new config reproduce the main batch exactly:** 1,389,015 stride and 990,512 VIP cycles (`results/endterm/phase4b_prep/regress3_*`).
-- The 70-run follow-up batch was **not started**: the host was on battery and repeatedly suspended (two 2-minute runs took 87 min). Run it on mains power: `scripts/env.sh scripts/run_phase4b_extra.sh` (about 30 min), then `python3 scripts/phase4b_report.py`.
+- **Follow-up batch done** (`scripts/run_phase4b_extra.sh`, 70 runs, all validated; tables in `results/endterm/phase4b/phase4b_summary.md`).
+  - **History depth 4–128:** identical speedups at every depth on all 9 configurations (uniform `x` = 128 KiB / 512 KiB / 2 MiB × RVV CSR / 1-accumulator / 2-accumulator). Depth-32 runs reproduce the main runs exactly. **Depth 4 suffices**, so storage is ≈ 2.1 KiB (§8).
+  - **`rvv_opt_m1`** issues no targets at any depth on these inputs, so the history-window hypothesis is **rejected**; the cause is still open.
+  - **L1D MSHRs 16/32/64:** VIP speedup at 2 MiB `x` grows from 1.75× to 1.95–1.96× for `rvv_acc2_m1`, but *drops* from 1.07× to 1.01× for `rvv_orig` (its VIP run slows from 1,947,754 to 2,069,207 cycles). The MSHR-limit hypothesis holds only for the two-accumulator kernel. At 512 KiB: `rvv_orig` 1.40× → 1.43×.

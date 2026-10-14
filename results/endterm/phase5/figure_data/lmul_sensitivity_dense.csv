@@ -1,0 +1,10 @@
+kernel,density_pct,roi_cycles
+dense_m1,5,759642.0
+dense_m1,20,759560.0
+dense_m1,50,759302.0
+dense_m2,5,590030.0
+dense_m2,20,589851.0
+dense_m2,50,589160.0
+dense_m4,5,2244889.0
+dense_m4,20,2172754.0
+dense_m4,50,2245423.0

@@ -3,7 +3,7 @@
 Everything this project built and measured, written so it can be turned into resume lines and interview answers.
 
 - **Where the numbers come from:** every number is from a gem5 simulation run in this project, or computed by a script from those runs. The source file is named in each section.
-- **Status (2026-10-14):** Phases 1–4 are complete. **Phase 4B (the hardware prefetcher) is implemented and evaluated: 184 runs, all validated, with a storage estimate.** Two follow-up studies (history depth, L1D MSHRs) are scripted but not run. Phases 5–6 (plots, final report) are not done yet.
+- **Status (2026-10-14):** **All phases (1–6) are complete.** Phase 4B: 254 runs, all validated, including the history-depth and MSHR follow-ups. Figures are in `results/endterm/phase5/figures/`, the end-term report is `docs/final_report.md`, and verified facts with sources are in `RESUME_FACTS.md`.
 
 ---
 
@@ -17,7 +17,7 @@ Everything this project built and measured, written so it can be turned into res
   - a **new hardware prefetcher inside gem5**, the *Vector-Indirect Prefetcher* (VIP), that prefetches gather targets.
 - **Along the way:** I found and isolated **4 bugs in gem5 25.1** itself.
 
-**Scale:** 737+ gem5 simulations · about 2,000 lines of C (RVV intrinsics) · about 2,000 lines of Python/shell tooling · 534 lines of new gem5 C++/Python · 4 real-world matrices from the SuiteSparse collection.
+**Scale:** 807+ gem5 simulations · about 2,000 lines of C (RVV intrinsics) · about 2,000 lines of Python/shell tooling · 534 lines of new gem5 C++/Python · 4 real-world matrices from the SuiteSparse collection.
 
 ---
 
@@ -146,9 +146,12 @@ The midterm timed the **whole program**. With ROI markers around only the kernel
 - Small losses (2–6%) when gathers already hit, because useless prefetches pollute the L2. An accuracy throttle would fix this.
 
 **Hardware cost (analytic, `scripts/vip_storage.py`):**
-- At the evaluated configuration (history of 32 index vectors): **≈ 10 KiB** with 2 shared history buffers, or ≈ 38 KiB as literally simulated (a history per table entry).
-- The streaming part (stream table + filters) is about 1 KiB; the index history dominates.
-- A 2–3 KiB design (history depth 4–8) would need the history-depth study, which is scripted (`scripts/run_phase4b_extra.sh`) but not run.
+- The history-depth study (depths 4–128, 70 runs) shows **identical speedups from a 4-entry history up**. So VIP needs **≈ 2.1 KiB of state** (2 shared history buffers; ≈ 5.7 KiB with a history per table entry), about 7% of the 32 KiB L1D.
+- Verified on the uniform size sweep (9 configurations).
+
+**Follow-up findings:**
+- **More L1D MSHRs** lift the two-accumulator kernel at 2 MiB `x` from 1.75× to 1.96×, but not the midterm kernel (1.07× → 1.01×).
+- The single-accumulator kernel's missed learning is **not** a history-window effect; its cause is still open.
 
 ---
 
@@ -180,8 +183,8 @@ Each one has a minimal reproducer, evidence runs, and a cross-check against QEMU
 ## 6. Resume bullets (pick 2–4; numbers are verified, Phase 4B marked)
 
 **Research / architecture focus**
-- Designed and implemented a **Vector-Indirect Prefetcher in the gem5 simulator (C++)** for RISC-V Vector gather loads. It learns index-to-address patterns despite out-of-order execution and prefetches ahead from incoming index cache lines. **Up to 1.43× faster sparse matrix–vector multiplication (1.6–1.9× for a two-accumulator kernel), L1D misses 55% → 7%, prefetch coverage 12% → 86%** over gem5's stride prefetcher, validated over 184 simulations; 1.08–1.35× on real circuit and web-graph matrices.
-- Characterised **RISC-V Vector (RVV 1.0) sparse matrix–vector multiplication on a cycle-level gem5 model** across 700+ simulations: 1.4–5.3× speedup over scalar, a dense/sparse crossover at ≈58% density, and gather misses costing up to 73% of runtime.
+- Designed and implemented a **Vector-Indirect Prefetcher in the gem5 simulator (C++)** for RISC-V Vector gather loads. It learns index-to-address patterns despite out-of-order execution and prefetches ahead from incoming index cache lines. **Up to 1.43× faster sparse matrix–vector multiplication (1.6–1.9× for a two-accumulator kernel), L1D misses 55% → 7%, prefetch coverage 12% → 86%** over gem5's stride prefetcher with an estimated ≈ 2 KiB of state; 1.08–1.35× on real circuit and web-graph matrices; validated over 254 simulations.
+- Characterised **RISC-V Vector (RVV 1.0) sparse matrix–vector multiplication on a cycle-level gem5 model** across 800+ simulations: 1.4–5.3× speedup over scalar, a dense/sparse crossover at ≈58% density, and gather misses costing up to 73% of runtime.
 - Built a **density-aware hybrid SpMV** that picks dense or sparse execution per row block from the measured crossover: **up to 1.6× faster than the best single format** and 5.8–7.6× faster than scalar on mixed-density matrices.
 
 **Engineering / verification focus**
@@ -200,7 +203,7 @@ Each one has a minimal reproducer, evidence runs, and a cross-check against QEMU
 
 - **All results are from simulation** (gem5 SE mode), not real hardware.
 - **Phase 4B gains depend on the regime.** Say "up to 1.4×" (gathers that miss L1 but hit L2). Typical gains on real matrices are 1.08–1.12× (1.35× on scircuit at VLEN=512); there are small losses (2–6%) where gathers already hit. When asked about the mechanism itself, quote the *indirect-only* numbers (1.39× / 1.08×).
-- **Hardware cost is an analytic storage estimate** (≈ 10 KiB, shared-history organisation, at the evaluated configuration), not synthesis. Don't claim "low overhead" or "a few KiB" until the history-depth study shows a small history keeps the speedup.
+- **Hardware cost is an analytic storage estimate** (≈ 2.1 KiB with a 4-entry history, shown sufficient on the uniform sweep), not synthesis. Say "estimated ≈ 2 KiB of state", not "area".
 - LMUL ≥ 2 gather results are excluded because of gem5 bugs. Say "LMUL=1 kernels" if asked about vector length.
 - Matrices are synthetic plus 4 SuiteSparse matrices; the largest is 1.5M nonzeros (bounded by simulation time).
 
